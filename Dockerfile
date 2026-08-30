@@ -10,11 +10,13 @@ COPY server.js seed.js ./
 COPY src/ ./src/
 COPY public/ ./public/
 
-# База лежит в томе, а не в образе.
+# Ни база, ни картинки статей не лежат в образе: оба каталога монтируются
+# снаружи (data/ и media/ из каталога проекта), поэтому пересборка образа их
+# не трогает, а новая фотография не требует пересборки вовсе.
 ENV DB_FILE=/data/wiki.sqlite \
+    MEDIA_DIR=/media \
     PORT=20030 \
     NODE_ENV=production
-VOLUME /data
 
 EXPOSE 20030
 

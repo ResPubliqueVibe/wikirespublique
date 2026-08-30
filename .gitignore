@@ -1,4 +1,6 @@
 node_modules/
 .env
 .DS_Store
-data/
+data/*
+!data/.gitkeep
+.tg-inbox/
