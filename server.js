@@ -37,6 +37,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 20020;
 const HOST = '0.0.0.0';
 const INVITE_CODE = process.env.INVITE_CODE || 'respublique';
+const MEDIA_DIR = process.env.MEDIA_DIR || join(__dirname, 'media');
 const HOME_SLUG = slugify('Заглавная_страница');
 const MAX_CONTENT = 200000;
 const CHANGES_LIMIT = 100;
@@ -73,6 +74,17 @@ app.use((req, res, next) => {
 
 app.use(
   express.static(join(__dirname, 'public'), {
+    maxAge: '1h',
+    index: false,
+    dotfiles: 'ignore',
+  })
+);
+
+// Картинки статей живут не в образе, а в каталоге, примонтированном снаружи:
+// добавить фотографию — значит положить файл в media/, пересобирать нечего.
+app.use(
+  '/media',
+  express.static(MEDIA_DIR, {
     maxAge: '1h',
     index: false,
     dotfiles: 'ignore',
