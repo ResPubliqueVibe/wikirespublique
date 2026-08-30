@@ -1,0 +1,18 @@
+{
+  "name": "res-publique-wiki",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Res Publique — свободная энциклопедия конфы",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "diff": "^8.0.2",
+    "express": "^5.1.0",
+    "js-yaml": "^4.1.0",
+    "markdown-it": "^14.1.0"
+  }
+}
