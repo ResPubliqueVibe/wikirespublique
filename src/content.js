@@ -268,6 +268,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Константин Гавриленко
+фото: /media/konstantin-gavrilenko.jpg
+подпись: Константин Гавриленко
 ---
 
 **Константин Гавриленко** — в конфе [[Res Publique]].
