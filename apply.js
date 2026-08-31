@@ -41,6 +41,50 @@ const targets = flags.has('--all')
       return spec;
     });
 
+const MONTHS = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+// Для каждого месяца: день, с которого начинается новый знак, и сам этот знак.
+// Родившийся раньше этого дня попадает под знак предыдущего месяца.
+const ZODIAC = [
+  [1, 20, 'Водолей'],
+  [2, 19, 'Рыбы'],
+  [3, 21, 'Овен'],
+  [4, 20, 'Телец'],
+  [5, 21, 'Близнецы'],
+  [6, 21, 'Рак'],
+  [7, 23, 'Лев'],
+  [8, 23, 'Дева'],
+  [9, 23, 'Весы'],
+  [10, 23, 'Скорпион'],
+  [11, 22, 'Стрелец'],
+  [12, 22, 'Козерог'],
+];
+
+/** «7 июня 2009» → «Близнецы». null, если дату не разобрать. */
+function zodiacFor(text) {
+  const m = /^\s*(\d{1,2})\s+([а-яё]+)/i.exec(String(text ?? ''));
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = MONTHS.indexOf(m[2].toLowerCase()) + 1;
+  if (!month || day < 1 || day > 31) return null;
+  const [, from, sign] = ZODIAC[month - 1];
+  if (day >= from) return sign;
+  return ZODIAC[(month + 10) % 12][2];
+}
+
 /**
  * Проверяет, что поля карточки участника идут в общем для всех биографий
  * порядке. Не блокирует запись — просто говорит, где карточка выбивается.
@@ -56,6 +100,15 @@ function fieldOrderProblem(content) {
   const problems = [];
   if (known.join('|') !== expected.join('|')) problems.push(`порядок полей: ожидается ${expected.join(', ')}`);
   if (unknown.length) problems.push(`поля вне общего списка: ${unknown.join(', ')}`);
+
+  const birth = meta['дата рождения'];
+  const sign = meta['знак зодиака'];
+  const computed = birth ? zodiacFor(birth) : null;
+  if (birth && !sign) problems.push(`есть дата рождения, но нет знака зодиака (по дате — ${computed || '?'})`);
+  if (birth && sign && computed && String(sign).trim() !== computed) {
+    problems.push(`знак зодиака «${sign}» не сходится с датой «${birth}» (по дате — ${computed})`);
+  }
+  if (!birth && sign) problems.push('знак зодиака есть, а даты рождения нет');
   return problems.length ? problems.join('; ') : null;
 }
 
