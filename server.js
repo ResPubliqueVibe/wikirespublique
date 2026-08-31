@@ -81,8 +81,24 @@ app.use(
   })
 );
 
+// Вики закрыта: читать её могут только вошедшие участники. Открытыми остаются
+// сам вход, регистрация и стили — без них на страницу входа не попасть.
+// PUBLIC_WIKI=1 возвращает прежний порядок, когда чтение открыто всем.
+const PUBLIC_WIKI = process.env.PUBLIC_WIKI === '1';
+const OPEN_PATHS = new Set(['/login', '/register', '/logout']);
+
+app.use((req, res, next) => {
+  if (PUBLIC_WIKI || req.user || OPEN_PATHS.has(req.path)) return next();
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next(httpError(403, 'Вики закрыта: войдите, чтобы продолжить.'));
+  }
+  const back = encodeURIComponent(req.originalUrl);
+  return res.redirect(`/login?next=${back}`);
+});
+
 // Картинки статей живут не в образе, а в каталоге, примонтированном снаружи:
 // добавить фотографию — значит положить файл в media/, пересобирать нечего.
+// Стоит после проверки входа: фотографии участников тоже не для посторонних.
 app.use(
   '/media',
   express.static(MEDIA_DIR, {
