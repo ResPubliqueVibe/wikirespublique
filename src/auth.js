@@ -73,7 +73,8 @@ export function sessionMiddleware(req, res, next) {
     const sess = Sessions.get(id);
     if (sess) {
       const user = Users.byId(sess.user_id);
-      if (user) {
+      // Снятое подтверждение обрывает и уже открытые сессии.
+      if (user && user.approved) {
         req.user = user;
         req.csrfToken = sess.csrf_token;
       }

@@ -29,6 +29,7 @@ import { searchPage } from './src/pages/search.js';
 import { loginPage } from './src/pages/login.js';
 import { registerPage } from './src/pages/register.js';
 import { profilePage } from './src/pages/profile.js';
+import { requestsPage, registrationSubmittedPage } from './src/pages/requests.js';
 import { changesPage } from './src/pages/changes.js';
 import { errorPage } from './src/pages/notfound.js';
 
@@ -101,6 +102,7 @@ function send(req, res, { status = 200, title, body, currentNav = '', query = ''
       body,
       user: req.user,
       csrfToken: req.csrfToken,
+      pendingCount: req.user?.is_admin ? Users.pendingCount() : 0,
       currentNav,
       query,
       tabsHtml,
@@ -423,6 +425,18 @@ app.post('/login', rateLimit, checkCsrf, (req, res) => {
       }),
     });
   }
+  if (!user.approved) {
+    return send(req, res, {
+      status: 403,
+      title: 'Вход',
+      body: loginPage({
+        csrfToken: req.csrfToken,
+        error: 'Заявка на регистрацию ещё не подтверждена администратором. Попробуйте позже.',
+        username,
+        next,
+      }),
+    });
+  }
   startSession(res, user.id);
   res.redirect(303, next);
 });
@@ -463,9 +477,35 @@ app.post('/register', rateLimit, checkCsrf, (req, res) => {
   if (password !== password2) return fail('Пароли не совпадают.');
   if (Users.byUsername(username)) return fail('Такое имя участника уже занято.');
 
-  const user = Users.create(username, hashPassword(password), displayName || username, firstUser);
-  startSession(res, user.id);
-  res.redirect(303, '/');
+  // Первый участник подтверждать заявку некому — он же и становится
+  // администратором, который будет подтверждать всех остальных.
+  const user = Users.create(username, hashPassword(password), displayName || username, firstUser, false, firstUser);
+  if (firstUser) {
+    startSession(res, user.id);
+    return res.redirect(303, '/');
+  }
+  send(req, res, {
+    title: 'Заявка отправлена',
+    body: registrationSubmittedPage({ username: user.username }),
+  });
+});
+
+app.get('/requests', requireLogin, requireAdmin, (req, res) => {
+  send(req, res, {
+    title: 'Заявки на регистрацию',
+    body: requestsPage({ csrfToken: req.csrfToken, requests: Users.pending() }),
+  });
+});
+
+app.post('/requests/:id/:decision', requireLogin, requireAdmin, checkCsrf, (req, res, next) => {
+  const id = Number(req.params.id);
+  const decision = req.params.decision;
+  if (!Number.isInteger(id) || id <= 0) return next(httpError(400, 'Неверная заявка.'));
+  if (decision !== 'approve' && decision !== 'reject') return next(httpError(400, 'Неизвестное решение.'));
+
+  const changed = decision === 'approve' ? Users.approve(id) : Users.reject(id);
+  if (!changed) return next(httpError(404, 'Заявка уже обработана или не найдена.'));
+  res.redirect(303, '/requests');
 });
 
 app.get('/user/:username', (req, res, next) => {
