@@ -13,7 +13,7 @@
  */
 import { db, Users, Pages, reindex } from './src/db.js';
 import { slugify, parseFrontmatter, extractCategories } from './src/render.js';
-import { PAGES } from './src/content.js';
+import { PAGES, FIELD_ORDER } from './src/content.js';
 
 const BOT_USERNAME = 'Бот';
 
@@ -40,6 +40,29 @@ const targets = flags.has('--all')
       }
       return spec;
     });
+
+/**
+ * Проверяет, что поля карточки участника идут в общем для всех биографий
+ * порядке. Не блокирует запись — просто говорит, где карточка выбивается.
+ */
+function fieldOrderProblem(content) {
+  const { meta } = parseFrontmatter(content);
+  if (!meta || String(meta['тип'] ?? '').trim() !== 'участник') return null;
+
+  const keys = Object.keys(meta).map((k) => String(k).trim().toLowerCase());
+  const unknown = keys.filter((k) => !FIELD_ORDER.includes(k));
+  const known = keys.filter((k) => FIELD_ORDER.includes(k));
+  const expected = FIELD_ORDER.filter((k) => known.includes(k));
+  const problems = [];
+  if (known.join('|') !== expected.join('|')) problems.push(`порядок полей: ожидается ${expected.join(', ')}`);
+  if (unknown.length) problems.push(`поля вне общего списка: ${unknown.join(', ')}`);
+  return problems.length ? problems.join('; ') : null;
+}
+
+for (const spec of PAGES) {
+  const problem = fieldOrderProblem(spec.content);
+  if (problem) console.warn(`  ? ${spec.title} — ${problem}`);
+}
 
 const bot = Users.byUsername(BOT_USERNAME);
 if (!bot) {
