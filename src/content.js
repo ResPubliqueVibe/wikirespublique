@@ -379,6 +379,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Виктория Гаврилова
+фото: /media/viktoriya-gavrilova.jpg
+подпись: Виктория Гаврилова
 ---
 
 **Виктория Гаврилова** — в конфе [[Res Publique]].
