@@ -248,6 +248,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Иван Терентьев
+фото: /media/ivan-terentyev.jpg
+подпись: Иван Терентьев
 ---
 
 **Иван Терентьев** — в конфе [[Res Publique]].
