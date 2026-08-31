@@ -80,14 +80,19 @@ function sidebar(current, query) {
 </div>`;
 }
 
-function userBlock(user, csrfToken) {
+function userBlock(user, csrfToken, pendingCount = 0) {
   if (!user) {
     return `<div class="userbar">
       <a href="/login">Войти</a>
       <a href="/register">Регистрация</a>
     </div>`;
   }
+  const requests =
+    user.is_admin && pendingCount > 0
+      ? `<a class="pending-link" href="/requests" title="Заявки на регистрацию">заявки: ${Number(pendingCount)}</a>`
+      : '';
   return `<div class="userbar">
+    ${requests}
     <a class="username" href="/user/${encodeURIComponent(user.username)}">${esc(user.display_name || user.username)}</a>
     ${user.is_admin ? '<span class="badge-admin" title="Администратор">админ</span>' : ''}
     <form method="post" action="/logout" class="inline-form">${csrfField(csrfToken)}<button type="submit" class="linkbutton">Выйти</button></form>
@@ -123,6 +128,7 @@ export function layout({
   body,
   user = null,
   csrfToken = null,
+  pendingCount = 0,
   currentNav = '',
   query = '',
   bodyClass = '',
@@ -147,7 +153,7 @@ export function layout({
   <div class="main">
     <div class="topbar">
       ${tabsHtml || '<span class="tabs-spacer"></span>'}
-      ${userBlock(user, csrfToken)}
+      ${userBlock(user, csrfToken, pendingCount)}
     </div>
     <main class="content" id="content">
 ${body}

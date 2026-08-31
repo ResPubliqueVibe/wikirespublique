@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   is_admin INTEGER NOT NULL DEFAULT 0,
   is_system INTEGER NOT NULL DEFAULT 0,
+  approved INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
 
@@ -61,11 +62,16 @@ CREATE INDEX IF NOT EXISTS idx_revisions_author ON revisions(author_id, id DESC)
 CREATE INDEX IF NOT EXISTS idx_categories_name ON page_categories(name);
 `);
 
-// Миграция баз, созданных до появления users.is_system.
+// Миграции старых баз. Значения по умолчанию подобраны так, чтобы уже
+// существующие учётные записи остались рабочими: все они считаются
+// подтверждёнными, подтверждения нужны только новым.
 {
   const cols = db.prepare('PRAGMA table_info(users)').all();
   if (!cols.some((c) => c.name === 'is_system')) {
     db.exec('ALTER TABLE users ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!cols.some((c) => c.name === 'approved')) {
+    db.exec('ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1');
   }
 }
 
@@ -99,16 +105,39 @@ export const Users = {
   byId: (id) => db.prepare('SELECT * FROM users WHERE id = ?').get(id),
   byUsername: (u) => db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(u),
   /** Живые участники: системный «Бот» из сеялки не считается, иначе он занял бы
-   *  слот «первый зарегистрировавшийся становится администратором». */
+   *  слот «первый зарегистрировавшийся становится администратором». Заявки,
+   *  ждущие подтверждения, считаются — иначе слот достался бы каждому, кто
+   *  зарегистрируется, пока первая заявка висит неподтверждённой. */
   count: () => db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_system = 0').get().n,
-  create(username, passwordHash, displayName, isAdmin, isSystem = false) {
+  create(username, passwordHash, displayName, isAdmin, isSystem = false, approved = true) {
     const info = db
       .prepare(
-        'INSERT INTO users (username, password_hash, display_name, is_admin, is_system, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO users (username, password_hash, display_name, is_admin, is_system, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(username, passwordHash, displayName || username, isAdmin ? 1 : 0, isSystem ? 1 : 0, nowISO());
+      .run(
+        username,
+        passwordHash,
+        displayName || username,
+        isAdmin ? 1 : 0,
+        isSystem ? 1 : 0,
+        approved ? 1 : 0,
+        nowISO()
+      );
     return Users.byId(Number(info.lastInsertRowid));
   },
+
+  /** Заявки на регистрацию, ждущие решения администратора. */
+  pending: () =>
+    db
+      .prepare(
+        'SELECT id, username, display_name, created_at FROM users WHERE approved = 0 AND is_system = 0 ORDER BY id ASC'
+      )
+      .all(),
+  pendingCount: () =>
+    db.prepare('SELECT COUNT(*) AS n FROM users WHERE approved = 0 AND is_system = 0').get().n,
+  approve: (id) => db.prepare('UPDATE users SET approved = 1 WHERE id = ? AND approved = 0').run(id).changes,
+  /** Отклонение удаляет заявку целиком: имя снова свободно, правок у неё нет. */
+  reject: (id) => db.prepare('DELETE FROM users WHERE id = ? AND approved = 0').run(id).changes,
   editCount: (id) => db.prepare('SELECT COUNT(*) AS n FROM revisions WHERE author_id = ?').get(id).n,
   recentEdits: (id, limit = 20) =>
     db

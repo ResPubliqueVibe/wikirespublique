@@ -10,7 +10,8 @@ export function registerPage({ csrfToken, error = null, values = {}, firstUser =
       ? notice('info', 'Вы будете первым участником — учётная запись получит права администратора.')
       : ''
   }
-  <p class="muted">Res Publique — закрытая вики конфы. Для регистрации нужен код приглашения.</p>
+  <p class="muted">Res Publique — закрытая вики конфы. Для регистрации нужен код приглашения,
+  а саму заявку подтверждает администратор: войти получится только после подтверждения.</p>
   <form method="post" action="/register" class="stacked-form">
     ${csrfField(csrfToken)}
     <label class="field">
@@ -37,7 +38,7 @@ export function registerPage({ csrfToken, error = null, values = {}, firstUser =
       <input type="text" name="invite" value="${v('invite')}" required maxlength="200" autocomplete="off">
     </label>
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Создать учётную запись</button>
+      <button type="submit" class="btn btn-primary">${firstUser ? 'Создать учётную запись' : 'Отправить заявку'}</button>
     </div>
   </form>
   <p class="muted">Уже зарегистрированы? <a href="/login">Войдите</a>.</p>

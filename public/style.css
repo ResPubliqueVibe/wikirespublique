@@ -1256,3 +1256,18 @@ button.btn-danger {
     padding: 0;
   }
 }
+
+/* Заявки на регистрацию */
+.pending-link {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(120, 120, 200, 0.16));
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.request-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
