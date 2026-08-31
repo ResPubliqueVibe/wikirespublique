@@ -295,6 +295,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Александр Черный
+фото: /media/aleksandr-cherny.jpg
+подпись: Александр Черный
 ---
 
 **Александр Черный** — в конфе [[Res Publique]].
