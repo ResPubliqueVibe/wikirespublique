@@ -464,6 +464,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Мария Милкович
+фото: /media/mariya-milkovich.jpg
+подпись: Мария Милкович
 ---
 
 **Мария Милкович** — в конфе [[Res Publique]].
