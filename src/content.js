@@ -224,6 +224,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Денис Дьячков
+фото: /media/denis-dyachkov.jpg
+подпись: Денис Дьячков
 ---
 
 **Денис Дьячков** — в конфе [[Res Publique]].
