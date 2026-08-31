@@ -386,6 +386,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Юлиан Луценко
+фото: /media/yulian-lutsenko.jpg
+подпись: Юлиан Луценко
 ---
 
 **Юлиан Луценко** — в конфе [[Res Publique]].
