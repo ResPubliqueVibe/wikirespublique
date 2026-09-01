@@ -305,6 +305,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Кристина Соловьёва
+фото: /media/kristina-solovyova.jpg
+подпись: Кристина Соловьёва
 ---
 
 **Кристина Соловьёва** — в конфе [[Res Publique]].
