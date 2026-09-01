@@ -208,6 +208,9 @@ const TYPE_KEYS = ['тип', 'type'];
 // Имя, под которым страница показывается при открытии. Нужно, когда в ссылках
 // и списках человек значится под одним именем, а в самой статье — под другим.
 const TITLE_KEYS = ['заголовок', 'title'];
+// Телеграм-ник — контакт живого человека, поэтому постороннему он не показывается
+// даже без разметки: поле прячется само.
+const PRIVATE_KEYS = ['телеграм', 'telegram'];
 const CAPTION_KEYS = ['подпись', 'caption'];
 
 function safeImageUrl(url) {
@@ -267,7 +270,8 @@ export function renderInfobox(meta, title, env) {
       displayTitle = stringifyValue(value).trim();
       continue;
     }
-    const text = stringifyValue(value);
+    let text = stringifyValue(value);
+    if (PRIVATE_KEYS.includes(k) && text.trim() && !text.includes('{{')) text = `{{${text}}}`;
     if (text.trim()) rows.push([String(key), text]);
   }
 

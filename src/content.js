@@ -993,7 +993,7 @@ export const PAGES = [
 интересы: визуальные новеллы, Elden Ring
 ---
 
-**Александр Черный** (в Telegram — [@coockoldry](https://t.me/coockoldry)) — в конфе
+**Александр Черный** {{(в Telegram — [@coockoldry](https://t.me/coockoldry))}} — в конфе
 [[Res Publique]]. Родился 12 июля 2004 года в Москве.
 
 ## Переезд в Германию
@@ -1336,7 +1336,7 @@ export const PAGES = [
 интересы: The Binding of Isaac, Максим Кац
 ---
 
-**Александра Орехова** (в Telegram — [@chopkwww111](https://t.me/chopkwww111)) —
+**Александра Орехова** {{(в Telegram — [@chopkwww111](https://t.me/chopkwww111))}} —
 участница [[Res Publique]]. Родилась 14 ноября 2008 года в Брянске.
 
 ## Личная жизнь
@@ -1397,7 +1397,7 @@ export const PAGES = [
 языки: русский, украинский, английский
 ---
 
-**Алексей Пушкарёв** (в Telegram — [@ALl_ECo_SAY](https://t.me/ALl_ECo_SAY)) —
+**Алексей Пушкарёв** {{(в Telegram — [@ALl_ECo_SAY](https://t.me/ALl_ECo_SAY))}} —
 участник [[Res Publique]]. Родился 23 ноября 1999 года в Одессе.
 
 ## Работа
@@ -1444,7 +1444,7 @@ export const PAGES = [
 интересы: литература, танцы, театр, аниме, природа
 ---
 
-**Эмили Зайферт** (в Telegram — [@EmiPushka](https://t.me/EmiPushka)) — участница
+**Эмили Зайферт** {{(в Telegram — [@EmiPushka](https://t.me/EmiPushka))}} — участница
 [[Res Publique]]. Родилась 7 июня 2009 года в Леверкузене, Германия; несмотря на
 место рождения, практически всю жизнь живёт в Кёльне.
 
