@@ -68,7 +68,9 @@ export function extractCategories(body) {
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false });
 
 // ---------------------------------------------------------------------------
-// Приватные куски: {{секрет}} или {{секрет|что видит посторонний}}.
+// Приватные куски: {{секрет}} или {{секрет||что видит посторонний}}.
+// Разделитель двойной: одинарная черта уже занята вики-ссылками [[цель|текст]],
+// и внутри скрытого блока такая ссылка утаскивала часть текста в «замену».
 // Скобки выбраны не случайно: markdown-it обрывает текстовый разбор на «{»,
 // а на «(» — нет, поэтому со скобками-круглыми правило просто не срабатывало.
 // ---------------------------------------------------------------------------
@@ -76,10 +78,10 @@ const REDACTED = '[ДАННЫЕ УДАЛЕНЫ]';
 const PRIVATE_RE = /\{\{([^{}]*?)\}\}/g;
 
 function splitPrivate(raw) {
-  const i = String(raw).indexOf('|');
+  const i = String(raw).indexOf('||');
   return i < 0
     ? { secret: String(raw).trim(), fallback: '' }
-    : { secret: String(raw).slice(0, i).trim(), fallback: String(raw).slice(i + 1).trim() };
+    : { secret: String(raw).slice(0, i).trim(), fallback: String(raw).slice(i + 2).trim() };
 }
 
 /** Убирает разметку из обычного текста: заголовок вкладки, сниппеты, диффы. */
