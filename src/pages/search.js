@@ -7,7 +7,7 @@ import { snippet, slugify } from '../render.js';
  * @param {Array<{slug:string,title:string,content:string}>} o.results
  * @param {boolean} o.exact  whether a page with exactly this slug exists
  */
-export function searchPage({ query, results, exact = false, user = null }) {
+export function searchPage({ query, results, exact = false, user = null, canSeePrivate = false }) {
   const q = String(query ?? '');
   const slug = slugify(q);
 
@@ -46,7 +46,7 @@ export function searchPage({ query, results, exact = false, user = null }) {
     .map(
       (r) => `<li class="search-result">
     <a class="search-title" href="${esc(wikiUrl(r.slug))}">${esc(r.title)}</a>
-    <p class="search-snippet">${snippet(r.content || '', q)}</p>
+    <p class="search-snippet">${snippet(r.content || '', q, 240, canSeePrivate)}</p>
   </li>`
     )
     .join('\n');

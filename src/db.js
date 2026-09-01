@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { redactPlain } from './render.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,7 +96,13 @@ function ftsDelete(pageId) {
 function ftsUpsert(pageId, title, content) {
   if (!hasFTS) return;
   ftsDelete(pageId);
-  db.prepare('INSERT INTO pages_fts(rowid, title, content) VALUES (?, ?, ?)').run(pageId, title, content);
+  // В индекс попадает уже вычищенный текст: иначе поиск по скрытому куску
+  // подтверждал бы его содержимое любому постороннему.
+  db.prepare('INSERT INTO pages_fts(rowid, title, content) VALUES (?, ?, ?)').run(
+    pageId,
+    redactPlain(title),
+    redactPlain(content)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -332,8 +339,9 @@ export function search(q, limit = 50) {
       }
     }
   }
+  // Тот же принцип для запасного поиска через LIKE: сравниваем с вычищенным текстом.
   const like = `%${term.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
-  return db
+  const rows = db
     .prepare(
       `SELECT p.id, p.slug, p.title, r.content
        FROM pages p LEFT JOIN revisions r ON r.id = p.current_revision_id
@@ -341,6 +349,11 @@ export function search(q, limit = 50) {
        ORDER BY p.title COLLATE NOCASE LIMIT ?`
     )
     .all(like, like, limit);
+  // Совпадение могло прийтись на скрытый кусок — такие страницы не показываем.
+  const needle = term.toLowerCase();
+  return rows.filter((r) =>
+    `${redactPlain(r.title)} ${redactPlain(r.content || '')}`.toLowerCase().includes(needle)
+  );
 }
 
 /** Rebuild the FTS index and category table from current revisions. */

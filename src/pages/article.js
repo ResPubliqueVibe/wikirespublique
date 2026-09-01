@@ -1,5 +1,5 @@
 import { esc, wikiUrl, formatDate, csrfField, notice } from '../layout.js';
-import { renderPage } from '../render.js';
+import { renderPage, renderInline, redactPlain } from '../render.js';
 
 function categoryBar(categories) {
   if (!categories?.length) return '';
@@ -25,9 +25,17 @@ export function articlePage({
   revision = null,
   flash = null,
 }) {
-  const { html, infobox, categories, displayTitle } = renderPage(content, { title: page.title, pageExists });
+  const canSeePrivate = !!user;
+  const { html, infobox, categories, displayTitle } = renderPage(content, {
+    title: page.title,
+    pageExists,
+    canSeePrivate,
+  });
   // Заголовок статьи может отличаться от названия страницы: см. поле «заголовок».
+  // В нём тоже работает разметка %%…%%, поэтому он рендерится, а не экранируется.
   const shownTitle = displayTitle || page.title;
+  const shownTitleHtml = renderInline(shownTitle, { canSeePrivate });
+  const shownTitlePlain = redactPlain(shownTitle, canSeePrivate);
 
   const banner = revision
     ? `<div class="notice notice-warning" role="alert">
@@ -49,7 +57,7 @@ export function articlePage({
   const deleteForm =
     user?.is_admin && !revision
       ? `<form method="post" action="${esc(wikiUrl(page.slug))}/delete" class="delete-form"
-              onsubmit="return confirm('Удалить страницу «${esc(shownTitle).replace(/'/g, '&#39;')}» со всей историей?')">
+              onsubmit="return confirm('Удалить страницу «${esc(shownTitlePlain).replace(/'/g, '&#39;')}» со всей историей?')">
            ${csrfField(csrfToken)}
            <button type="submit" class="btn btn-danger">Удалить страницу</button>
          </form>`
@@ -63,7 +71,7 @@ export function articlePage({
   return `${flash ? notice(flash.kind, flash.text) : ''}
 ${banner}
 <article class="article">
-  <h1 class="article-title">${esc(shownTitle)}</h1>
+  <h1 class="article-title">${shownTitleHtml}</h1>
   ${infobox}
   <div class="article-body">
 ${html}

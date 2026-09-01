@@ -91,6 +91,9 @@ function zodiacFor(text) {
  */
 function fieldOrderProblem(content) {
   const { meta } = parseFrontmatter(content);
+  // Карточка не разобралась: YAML сломан (например, значение начинается с «%»
+  // или с «*»). Молча потерять всю карточку хуже, чем громко сказать.
+  if (!meta && /^---[ \t]*\r?\n/.test(String(content))) return 'карточка не разобралась: проверьте YAML';
   if (!meta || String(meta['тип'] ?? '').trim() !== 'участник') return null;
 
   const keys = Object.keys(meta).map((k) => String(k).trim().toLowerCase());

@@ -67,6 +67,50 @@ export function extractCategories(body) {
 // ---------------------------------------------------------------------------
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false });
 
+// ---------------------------------------------------------------------------
+// Приватные куски: {{секрет}} или {{секрет|что видит посторонний}}.
+// Скобки выбраны не случайно: markdown-it обрывает текстовый разбор на «{»,
+// а на «(» — нет, поэтому со скобками-круглыми правило просто не срабатывало.
+// ---------------------------------------------------------------------------
+const REDACTED = '[ДАННЫЕ УДАЛЕНЫ]';
+const PRIVATE_RE = /\{\{([^{}]*?)\}\}/g;
+
+function splitPrivate(raw) {
+  const i = String(raw).indexOf('|');
+  return i < 0
+    ? { secret: String(raw).trim(), fallback: '' }
+    : { secret: String(raw).slice(0, i).trim(), fallback: String(raw).slice(i + 1).trim() };
+}
+
+/** Убирает разметку из обычного текста: заголовок вкладки, сниппеты, диффы. */
+export function redactPlain(text, canSeePrivate = false) {
+  return String(text ?? '').replace(PRIVATE_RE, (_, raw) => {
+    const { secret, fallback } = splitPrivate(raw);
+    return canSeePrivate ? secret : fallback || REDACTED;
+  });
+}
+
+md.inline.ruler.before('emphasis', 'private', (state, silent) => {
+  const { src, pos } = state;
+  if (src.charCodeAt(pos) !== 0x7b || src.charCodeAt(pos + 1) !== 0x7b) return false;
+  const end = src.indexOf('}}', pos + 2);
+  if (end < 0) return false;
+  if (!silent) {
+    const token = state.push('private', '', 0);
+    token.meta = splitPrivate(src.slice(pos + 2, end));
+  }
+  state.pos = end + 2;
+  return true;
+});
+
+md.renderer.rules.private = (tokens, idx, _opts, env) => {
+  const { secret, fallback } = tokens[idx].meta;
+  if (env?.canSeePrivate) {
+    return `<span class="private" title="Видно только участникам">${esc(secret)}</span>`;
+  }
+  return `<span class="redacted" title="Скрыто: войдите, чтобы увидеть">${esc(fallback || REDACTED)}</span>`;
+};
+
 /** Inline rule for [[Target]] and [[Target|label]]. */
 function wikilinkPlugin(mdInst) {
   mdInst.inline.ruler.before('link', 'wikilink', (state, silent) => {
@@ -156,6 +200,7 @@ export function renderInline(text, env = {}) {
 // Infobox
 // ---------------------------------------------------------------------------
 const IMAGE_KEYS = ['изображение', 'image', 'фото'];
+export const PRIVATE_MEDIA_PREFIX = '/media/private/';
 const TYPE_KEYS = ['тип', 'type'];
 // Имя, под которым страница показывается при открытии. Нужно, когда в ссылках
 // и списках человек значится под одним именем, а в самой статье — под другим.
@@ -191,11 +236,20 @@ export function renderInfobox(meta, title, env) {
   let caption = null;
   let type = null;
   let displayTitle = null;
+  let imagePrivate = false;
   const rows = [];
   for (const [key, value] of entries) {
     const k = String(key).trim().toLowerCase();
     if (IMAGE_KEYS.includes(k)) {
-      image = safeImageUrl(value);
+      const url = safeImageUrl(stringifyValue(value));
+      // Приватность фотографии определяет каталог: всё из /media/private/
+      // постороннему не показывается (сам файл сервер ему тоже не отдаёт).
+      if (url && url.startsWith(PRIVATE_MEDIA_PREFIX) && !env?.canSeePrivate) {
+        imagePrivate = true;
+        image = null;
+      } else {
+        image = url;
+      }
       continue;
     }
     if (CAPTION_KEYS.includes(k)) {
@@ -216,12 +270,16 @@ export function renderInfobox(meta, title, env) {
 
   const shown = displayTitle || title;
   const typeClass = type ? ` infobox-${slugify(type) || 'общий'}` : '';
-  let html = `<aside class="infobox${typeClass}" aria-label="Карточка: ${esc(shown)}">`;
-  html += `<div class="infobox-header">${esc(shown)}</div>`;
+  let html = `<aside class="infobox${typeClass}" aria-label="Карточка: ${esc(redactPlain(shown, env?.canSeePrivate))}">`;
+  html += `<div class="infobox-header">${renderInline(shown, env)}</div>`;
   if (type) html += `<div class="infobox-type">${esc(type)}</div>`;
   if (image) {
-    html += `<div class="infobox-image"><img src="${esc(image)}" alt="${esc(title)}" loading="lazy"></div>`;
+    const alt = esc(redactPlain(shown, env?.canSeePrivate));
+    html += `<div class="infobox-image"><img src="${esc(image)}" alt="${alt}" loading="lazy"></div>`;
     if (caption) html += `<div class="infobox-caption">${renderInline(caption, env)}</div>`;
+  } else if (imagePrivate) {
+    html += `<div class="infobox-image infobox-image-redacted" role="img" aria-label="Изображение скрыто">`;
+    html += `<span class="redacted">[ИЗОБРАЖЕНИЕ ИЗЪЯТО]</span></div>`;
   }
   if (rows.length) {
     html += '<table class="infobox-rows">';
@@ -244,10 +302,10 @@ export function renderInfobox(meta, title, env) {
  * @param {(slug:string)=>boolean} opts.pageExists
  * @returns {{html:string, infobox:string, categories:string[], toc:Array, meta:object|null}}
  */
-export function renderPage(raw, { title = '', pageExists = () => true } = {}) {
+export function renderPage(raw, { title = '', pageExists = () => true, canSeePrivate = false } = {}) {
   const { meta, body } = parseFrontmatter(raw);
   const { categories, body: clean } = extractCategories(body);
-  const env = { pageExists, wanted: new Set() };
+  const env = { pageExists, canSeePrivate, wanted: new Set() };
 
   const tokens = md.parse(clean, env);
   const toc = env.toc || [];
@@ -266,8 +324,8 @@ export function renderPage(raw, { title = '', pageExists = () => true } = {}) {
 }
 
 /** Plain-text preview of a page source, used for search snippets. */
-export function toPlainText(raw) {
-  const { body } = parseFrontmatter(raw);
+export function toPlainText(raw, canSeePrivate = false) {
+  const { body } = parseFrontmatter(redactPlain(raw, canSeePrivate));
   const { body: clean } = extractCategories(body);
   return clean
     .replace(/```[\s\S]*?```/g, ' ')
@@ -282,8 +340,8 @@ export function toPlainText(raw) {
 }
 
 /** Escaped snippet with <mark>-highlighted query terms. */
-export function snippet(raw, query, length = 240) {
-  const text = toPlainText(raw);
+export function snippet(raw, query, length = 240, canSeePrivate = false) {
+  const text = toPlainText(raw, canSeePrivate);
   const terms = (String(query ?? '').match(/[\p{L}\p{N}_]+/gu) || []).filter((t) => t.length > 1);
   let start = 0;
   if (terms.length) {

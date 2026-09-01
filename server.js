@@ -18,7 +18,7 @@ import {
   checkCsrf,
 } from './src/auth.js';
 import { layout, tabs, esc } from './src/layout.js';
-import { slugify, titleFromSlug, parseFrontmatter, extractCategories } from './src/render.js';
+import { slugify, titleFromSlug, parseFrontmatter, extractCategories, redactPlain } from './src/render.js';
 
 import { articlePage, missingPage } from './src/pages/article.js';
 import { editPage } from './src/pages/edit.js';
@@ -94,6 +94,12 @@ app.use((req, res, next) => {
   }
   const back = encodeURIComponent(req.originalUrl);
   return res.redirect(`/login?next=${back}`);
+});
+
+// Приватные фотографии лежат в media/private/ и посторонним не отдаются.
+app.use('/media/private', (req, res, next) => {
+  if (req.user) return next();
+  return next(httpError(404, 'Файл не найден.'));
 });
 
 // Картинки статей живут не в образе, а в каталоге, примонтированном снаружи:
@@ -202,8 +208,9 @@ function renderArticle(req, res, slug, { revision = null, flash = null } = {}) {
   // за это отвечает поле «заголовок» в карточке.
   const meta = parseFrontmatter(shown ? shown.content : '').meta;
   const displayTitle = String(meta?.['заголовок'] ?? meta?.title ?? '').trim() || page.title;
+  const tabTitle = redactPlain(displayTitle, !!req.user);
   return send(req, res, {
-    title: displayTitle,
+    title: tabTitle,
     body: articlePage({
       page,
       content: shown ? shown.content : '',
@@ -250,7 +257,13 @@ app.get('/search', (req, res) => {
   const results = q.trim() ? searchPages(q) : [];
   send(req, res, {
     title: q.trim() ? `Поиск: ${q}` : 'Поиск',
-    body: searchPage({ query: q, results, exact: Pages.exists(slugify(q)), user: req.user }),
+    body: searchPage({
+      query: q,
+      results,
+      exact: Pages.exists(slugify(q)),
+      user: req.user,
+      canSeePrivate: !!req.user,
+    }),
     query: q,
   });
 });
@@ -374,7 +387,14 @@ app.get('/wiki/:slug/diff', (req, res, next) => {
 
   send(req, res, {
     title: `Сравнение версий: ${page.title}`,
-    body: diffPage({ page, from, to, user: req.user, csrfToken: req.csrfToken }),
+    body: diffPage({
+      // Постороннему сравниваем уже вычищенные тексты: иначе скрытое видно в дифе.
+      page,
+      from: from && { ...from, content: redactPlain(from.content, !!req.user) },
+      to: to && { ...to, content: redactPlain(to.content, !!req.user) },
+      user: req.user,
+      csrfToken: req.csrfToken,
+    }),
     tabsHtml: tabs({ slug, active: 'history', exists: true }),
     bodyClass: 'page-diff',
   });
