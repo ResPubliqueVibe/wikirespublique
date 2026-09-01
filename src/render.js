@@ -108,7 +108,8 @@ md.inline.ruler.before('emphasis', 'private', (state, silent) => {
 md.renderer.rules.private = (tokens, idx, _opts, env) => {
   const { secret, fallback } = tokens[idx].meta;
   if (env?.canSeePrivate) {
-    return `<span class="private" title="Видно только участникам">${esc(secret)}</span>`;
+    // Внутри скрытого куска работает обычная разметка: ссылки, картинки, курсив.
+    return `<span class="private" title="Видно только участникам">${md.renderInline(secret, env)}</span>`;
   }
   return `<span class="redacted" title="Скрыто: войдите, чтобы увидеть">${esc(fallback || REDACTED)}</span>`;
 };
