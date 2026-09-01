@@ -346,6 +346,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Ирина Сокологорская
+фото: /media/irina-sokologorskaya.jpg
+подпись: Ирина Сокологорская
 ---
 
 **Ирина Сокологорская** — в конфе [[Res Publique]].
