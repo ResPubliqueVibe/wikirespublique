@@ -325,6 +325,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Наталья Устинова
+фото: /media/natalya-ustinova.jpg
+подпись: Наталья Устинова
 ---
 
 **Наталья Устинова** — в конфе [[Res Publique]].
