@@ -157,6 +157,9 @@ export function renderInline(text, env = {}) {
 // ---------------------------------------------------------------------------
 const IMAGE_KEYS = ['изображение', 'image', 'фото'];
 const TYPE_KEYS = ['тип', 'type'];
+// Имя, под которым страница показывается при открытии. Нужно, когда в ссылках
+// и списках человек значится под одним именем, а в самой статье — под другим.
+const TITLE_KEYS = ['заголовок', 'title'];
 const CAPTION_KEYS = ['подпись', 'caption'];
 
 function safeImageUrl(url) {
@@ -187,6 +190,7 @@ export function renderInfobox(meta, title, env) {
   let image = null;
   let caption = null;
   let type = null;
+  let displayTitle = null;
   const rows = [];
   for (const [key, value] of entries) {
     const k = String(key).trim().toLowerCase();
@@ -202,13 +206,18 @@ export function renderInfobox(meta, title, env) {
       type = stringifyValue(value);
       continue;
     }
+    if (TITLE_KEYS.includes(k)) {
+      displayTitle = stringifyValue(value).trim();
+      continue;
+    }
     const text = stringifyValue(value);
     if (text.trim()) rows.push([String(key), text]);
   }
 
+  const shown = displayTitle || title;
   const typeClass = type ? ` infobox-${slugify(type) || 'общий'}` : '';
-  let html = `<aside class="infobox${typeClass}" aria-label="Карточка: ${esc(title)}">`;
-  html += `<div class="infobox-header">${esc(title)}</div>`;
+  let html = `<aside class="infobox${typeClass}" aria-label="Карточка: ${esc(shown)}">`;
+  html += `<div class="infobox-header">${esc(shown)}</div>`;
   if (type) html += `<div class="infobox-type">${esc(type)}</div>`;
   if (image) {
     html += `<div class="infobox-image"><img src="${esc(image)}" alt="${esc(title)}" loading="lazy"></div>`;
@@ -222,7 +231,7 @@ export function renderInfobox(meta, title, env) {
     html += '</table>';
   }
   html += '</aside>';
-  return { html, type };
+  return { html, type, displayTitle };
 }
 
 // ---------------------------------------------------------------------------
@@ -251,9 +260,9 @@ export function renderPage(raw, { title = '', pageExists = () => true } = {}) {
     const first = html.search(/<h[23][ >]/);
     html = first >= 0 ? html.slice(0, first) + box + '\n' + html.slice(first) : html + box;
   }
-  const { html: infobox } = renderInfobox(meta, title, env);
+  const { html: infobox, displayTitle } = renderInfobox(meta, title, env);
 
-  return { html, infobox, categories, toc, meta, wanted: [...env.wanted] };
+  return { html, infobox, categories, toc, meta, displayTitle, wanted: [...env.wanted] };
 }
 
 /** Plain-text preview of a page source, used for search snippets. */

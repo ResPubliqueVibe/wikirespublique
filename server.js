@@ -198,8 +198,12 @@ function renderArticle(req, res, slug, { revision = null, flash = null } = {}) {
   }
   const current = Pages.currentContent(page.id);
   const shown = revision || current;
+  // Страница может показываться под другим именем, чем значится в ссылках:
+  // за это отвечает поле «заголовок» в карточке.
+  const meta = parseFrontmatter(shown ? shown.content : '').meta;
+  const displayTitle = String(meta?.['заголовок'] ?? meta?.title ?? '').trim() || page.title;
   return send(req, res, {
-    title: page.title,
+    title: displayTitle,
     body: articlePage({
       page,
       content: shown ? shown.content : '',
