@@ -365,6 +365,8 @@ export const PAGES = [
     content: `---
 тип: участник
 имя: Максим Святченко
+фото: /media/maksim-svyatchenko.jpg
+подпись: Максим Святченко
 ---
 
 **Максим Святченко** — в конфе [[Res Publique]].
