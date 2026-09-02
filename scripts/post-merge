@@ -10,7 +10,23 @@
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/data"
 
+LOG=$ROOT/data/deploy.log
+
 # Хук выполняется внутри git merge, которого ждёт бот, а сборка образа занимает
-# под минуту — поэтому деплой уходит в отдельную сессию и пишет в свой лог.
-setsid sh "$ROOT/deploy.sh" >> "$ROOT/data/deploy.log" 2>&1 < /dev/null &
+# под минуту, поэтому деплой в любом случае уходит в сторону.
+#
+# Через systemd, а не просто в фон: мерж может прийти из песочницы сессии, где
+# сокета докера нет вовсе («no such file or directory» в логе деплоя), а
+# пользовательский systemd всегда запускает в хостовом пространстве имён.
+if command -v systemd-run >/dev/null 2>&1 &&
+  systemd-run --user --collect --quiet \
+    --unit="wiki-deploy-$(date +%s)" \
+    --description="Обновление вики после мержа в main" \
+    /bin/sh -c "sh '$ROOT/deploy.sh' >> '$LOG' 2>&1" 2>>"$LOG"
+then
+  exit 0
+fi
+
+echo "$(date '+%F %T') systemd-run недоступен, деплой запущен напрямую" >> "$LOG"
+setsid sh "$ROOT/deploy.sh" >> "$LOG" 2>&1 < /dev/null &
 exit 0

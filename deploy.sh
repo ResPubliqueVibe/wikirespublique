@@ -18,6 +18,21 @@ MEDIA=${WIKI_MEDIA:-$ROOT/media}
 
 say() { printf '%s %s\n' "$(date '+%F %T')" "$*"; }
 
+# Группу docker пользователь получил после старта своего systemd, и юнит попросить
+# её для себя не может (то же самое обходит deploy/run-bot.sh у бота). sg выдаёт
+# группу без пароля: аккаунт уже перечислен в /etc/group.
+if ! docker version >/dev/null 2>&1 && [ -z "${WIKI_SG:-}" ] && command -v sg >/dev/null 2>&1; then
+  WIKI_SG=1
+  export WIKI_SG
+  say "докер недоступен напрямую, перезапускаю себя с группой docker"
+  exec sg docker -c "sh '$0'"
+fi
+
+if ! docker version >/dev/null 2>&1; then
+  say "докер недоступен: $(docker version 2>&1 | tail -1)"
+  exit 1
+fi
+
 mkdir -p "$DATA"
 
 # Два мержа подряд — два деплоя одновременно: сборка и docker run передрались бы
