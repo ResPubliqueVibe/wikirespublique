@@ -93,9 +93,10 @@ const WORD_VARIANTS = [null, null, '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]
 const TEXT_VARIANTS = ['[ДАННЫЕ УДАЛЕНЫ]', '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]', '[ДАННЫЕ УДАЛЕНЫ]'];
 const NOTICE = '[ДОСТУП К ФРАГМЕНТУ ОГРАНИЧЕН — ТРЕБУЕТСЯ ДОПУСК УРОВНЯ 4]';
 const LONG_FRAGMENT = 120;
-// «Прилегающий» символ: буква, цифра или то, чем склеивают номера и даты
-// (Зона-19, 14/02/2003) — за ними тоже стоит закраска, а не фраза.
-const WORDCHAR_RE = /[\p{L}\p{N}\-/.:№]/u;
+const WORDCHAR_RE = /[\p{L}\p{N}]/u;
+// Чем склеивают номера и даты: Зона-19, 14.02.2003, 14/02. Считается только
+// между знаками — точка в конце предложения слово не продолжает.
+const GLUE_RE = /[-/.:№]/;
 const MEDIA_RE = /^!\[[^\]]*\]\(\s*([^)\s]+)/;
 
 /** FNV-1a: нужен стабильный выбор варианта, а не криптография. */
@@ -106,6 +107,31 @@ function hash32(str) {
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h;
+}
+
+/**
+ * Прилегает ли к скрытому куску то же слово.
+ * @param {string} near соседний символ
+ * @param {string} far  следующий за ним наружу
+ */
+function touchesWord(near, far) {
+  if (!near) return false;
+  if (WORDCHAR_RE.test(near)) return true;
+  return GLUE_RE.test(near) && WORDCHAR_RE.test(far || '');
+}
+
+/**
+ * Текст, который увидел бы участник: без вики-ссылок, картинок и звёздочек
+ * жирного. По нему считается длина плашки и решается, слово это или фраза, —
+ * иначе {{[[Даниил Холлац|Данко]]}} сошло бы за фразу из-за разметки.
+ */
+function visibleText(s) {
+  return s
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`]/g, '')
+    .trim();
 }
 
 /** Плашка примерно в размер скрытого — как в настоящих досье. */
@@ -127,8 +153,8 @@ function mediaPhrase(secret) {
  * Что видит посторонний вместо скрытого куска.
  * @param {string} secret   скрытый текст
  * @param {string} fallback явная замена от автора ({{секрет||замена}})
- * @param {string} before   символ перед {{ — по нему видно, что закрыт кусок слова
- * @param {string} after    символ после }}
+ * @param {string} before   два символа перед {{ — по ним видно, закрыт ли кусок слова
+ * @param {string} after    два символа после }}
  */
 export function redactionText(secret, fallback = '', before = '', after = '') {
   // Звёздочки в авторских заменах (*****ко) — та же цензура, только старым
@@ -141,17 +167,23 @@ export function redactionText(secret, fallback = '', before = '', after = '') {
   const media = mediaPhrase(s);
   if (media) return media;
 
+  const shown = visibleText(s);
+
   // Слово закрыто не целиком («Ал{{ексей}}», «20{{02}}») — фраза здесь порвала
   // бы слово пополам, поэтому только плашка.
-  if (WORDCHAR_RE.test(before) || WORDCHAR_RE.test(after)) return blocks(s.length);
+  const b = String(before);
+  const a = String(after);
+  if (touchesWord(b.slice(-1), b.slice(-2, -1)) || touchesWord(a[0] || '', a[1] || '')) {
+    return blocks(shown.length);
+  }
 
   // Числа и совсем короткие куски: «[УДАЛЕНО]» вместо «19» читается нелепо.
-  if (s.length <= 4 || !/\p{L}/u.test(s)) return blocks(s.length);
+  if (shown.length <= 4 || !/\p{L}/u.test(shown)) return blocks(shown.length);
 
-  if (s.length >= LONG_FRAGMENT || s.includes('\n')) return NOTICE;
+  if (shown.length >= LONG_FRAGMENT || shown.includes('\n')) return NOTICE;
 
-  const variants = /\s/.test(s) ? TEXT_VARIANTS : WORD_VARIANTS;
-  return variants[hash32(s) % variants.length] || blocks(s.length);
+  const variants = /\s/.test(shown) ? TEXT_VARIANTS : WORD_VARIANTS;
+  return variants[hash32(shown) % variants.length] || blocks(shown.length);
 }
 
 function splitPrivate(raw) {
@@ -167,7 +199,7 @@ export function redactPlain(text, canSeePrivate = false) {
   return whole.replace(PRIVATE_RE, (match, raw, offset) => {
     const { secret, fallback } = splitPrivate(raw);
     if (canSeePrivate) return secret;
-    return redactionText(secret, fallback, whole[offset - 1] || '', whole[offset + match.length] || '');
+    return redactionText(secret, fallback, whole.slice(Math.max(0, offset - 2), offset), whole.slice(offset + match.length, offset + match.length + 2));
   });
 }
 
@@ -180,8 +212,8 @@ md.inline.ruler.before('emphasis', 'private', (state, silent) => {
     const token = state.push('private', '', 0);
     token.meta = {
       ...splitPrivate(src.slice(pos + 2, end)),
-      before: src[pos - 1] || '',
-      after: src[end + 2] || ''
+      before: src.slice(Math.max(0, pos - 2), pos),
+      after: src.slice(end + 2, end + 4)
     };
   }
   state.pos = end + 2;
