@@ -147,6 +147,17 @@ function wikilinkPlugin(mdInst) {
 }
 md.use(wikilinkPlugin);
 
+// Видео вставляют тем же синтаксисом, что и картинку: ![подпись](/media/файл.mp4).
+const VIDEO_RE = /\.(mp4|webm|mov|m4v)$/i;
+const defaultImage = md.renderer.rules.image;
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const src = tokens[idx].attrGet('src') || '';
+  if (!VIDEO_RE.test(src)) return defaultImage(tokens, idx, options, env, self);
+  const alt = tokens[idx].content || '';
+  return `<video class="article-video" controls preload="metadata" src="${esc(src)}"` +
+    `${alt ? ` title="${esc(alt)}"` : ''}></video>`;
+};
+
 /** Anchor ids on headings + TOC collection. */
 function headingAnchors(mdInst) {
   mdInst.core.ruler.push('heading_anchors', (state) => {

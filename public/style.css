@@ -1304,3 +1304,9 @@ button.btn-danger {
   height: auto;
   border-radius: 6px;
 }
+
+.article-video {
+  max-width: 100%;
+  border-radius: 6px;
+  background: #000;
+}
