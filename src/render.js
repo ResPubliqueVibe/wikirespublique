@@ -76,6 +76,17 @@ const md = new MarkdownIt({ html: false, linkify: true, typographer: false, brea
 // ---------------------------------------------------------------------------
 const PRIVATE_RE = /\{\{([^{}]*?)\}\}/g;
 
+// Целый раздел закрывается блоком из трёх скобок на отдельных строках:
+//
+//   {{{
+//   Абзац. И ещё абзац.
+//   }}}
+//
+// Строчная разметка на каждом абзаце дала бы столбик одинаковых отказов в
+// допуске, а через пустую строку она не тянется: markdown-it сначала режет
+// текст на блоки, и закрывающие скобки остались бы в другом абзаце.
+const PRIVATE_BLOCK_RE = /^[ \t]*\{\{\{[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*\}\}\}[ \t]*(?=\r?\n|$)/gm;
+
 // ---------------------------------------------------------------------------
 // Как выглядит цензура: стилистика рассекреченного досье. Чёрные плашки ████
 // закрывают отдельные слова, [УДАЛЕНО] и родня — законченные куски текста,
@@ -92,6 +103,7 @@ const REDACTED = '[ДАННЫЕ УДАЛЕНЫ]';
 const WORD_VARIANTS = [null, null, '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]'];
 const TEXT_VARIANTS = ['[ДАННЫЕ УДАЛЕНЫ]', '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]', '[ДАННЫЕ УДАЛЕНЫ]'];
 const NOTICE = '[ДОСТУП К ФРАГМЕНТУ ОГРАНИЧЕН — ТРЕБУЕТСЯ ДОПУСК УРОВНЯ 4]';
+const SECTION_NOTICE = '[ДОСТУП К РАЗДЕЛУ ОГРАНИЧЕН — ТРЕБУЕТСЯ ДОПУСК УРОВНЯ 4]';
 const LONG_FRAGMENT = 120;
 const WORDCHAR_RE = /[\p{L}\p{N}]/u;
 // Чем склеивают номера и даты: Зона-19, 14.02.2003, 14/02. Считается только
@@ -195,7 +207,9 @@ function splitPrivate(raw) {
 
 /** Убирает разметку из обычного текста: заголовок вкладки, сниппеты, диффы. */
 export function redactPlain(text, canSeePrivate = false) {
-  const whole = String(text ?? '');
+  const whole = String(text ?? '').replace(PRIVATE_BLOCK_RE, (_, inner) =>
+    canSeePrivate ? inner : SECTION_NOTICE
+  );
   return whole.replace(PRIVATE_RE, (match, raw, offset) => {
     const { secret, fallback } = splitPrivate(raw);
     if (canSeePrivate) return secret;
@@ -228,6 +242,36 @@ md.renderer.rules.private = (tokens, idx, _opts, env) => {
   }
   const text = redactionText(secret, fallback, before, after);
   return `<span class="${redactedClass(text)}" title="Скрыто: войдите, чтобы увидеть">${esc(text)}</span>`;
+};
+
+// Блок разбирается до fence: иначе строка «{{{» уехала бы в обычный абзац.
+md.block.ruler.before('fence', 'private_block', (state, startLine, endLine, silent) => {
+  const open = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine]);
+  if (open.trim() !== '{{{') return false;
+
+  let line = startLine + 1;
+  for (; line < endLine; line += 1) {
+    const text = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
+    if (text.trim() === '}}}') break;
+  }
+  // Незакрытый блок оставляем обычному разбору: пусть автор увидит свои скобки,
+  // а не потеряет вместе с ними половину статьи.
+  if (line >= endLine) return false;
+  if (silent) return true;
+
+  const token = state.push('private_block', '', 0);
+  token.content = state.getLines(startLine + 1, line, 0, false);
+  token.map = [startLine, line + 1];
+  state.line = line + 1;
+  return true;
+});
+
+md.renderer.rules.private_block = (tokens, idx, _opts, env) => {
+  if (env?.canSeePrivate) {
+    // Внутри работает обычная разметка, включая заголовки и списки.
+    return `<div class="private private-block" title="Видно только участникам">${md.render(tokens[idx].content, env)}</div>`;
+  }
+  return `<div class="redacted redacted-notice">${esc(SECTION_NOTICE)}</div>`;
 };
 
 /**
