@@ -39,6 +39,10 @@
   --warn: #8a6100;
   --err: #a32620;
 
+  --redact-ink: #14110c;
+  --redact-plate-bg: #14110c;
+  --redact-plate-fg: #ddd8cc;
+
   --radius: 3px;
   --sidebar-w: 15.5rem;
   --content-max: 60rem;
@@ -65,6 +69,10 @@
     --link: #8fbce8;
     --link-visited: #b7a6e0;
     --link-new: #e88a84;
+
+    --redact-ink: #cec7b7;
+    --redact-plate-bg: #cec7b7;
+    --redact-plate-fg: #16150f;
 
     --add-bg: #1c3a24;
     --add-line: #3f7a4e;
@@ -1272,17 +1280,42 @@ button.btn-danger {
   flex-wrap: wrap;
 }
 
-/* Приватные куски: %%секрет%% или %%секрет|видимая замена%% */
+/* Приватные куски: {{секрет}} или {{секрет||видимая замена}}.
+   Оформление — рассекреченное досье: фразы вроде [УДАЛЕНО] идут чёрной
+   плашкой, а закраска ████ сама по себе плашка и подложки не требует. */
 .redacted {
-  background: #111;
-  color: #d8d8d8;
+  font-family: var(--mono);
+  font-size: 0.92em;
+  cursor: help;
+}
+
+.redacted-plate {
+  background: var(--redact-plate-bg);
+  color: var(--redact-plate-fg);
   padding: 0 0.35em;
   border-radius: 2px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
   letter-spacing: 0.04em;
   white-space: nowrap;
-  cursor: help;
+}
+
+.redacted-blocks {
+  color: var(--redact-ink);
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+}
+
+.redacted-notice {
+  display: block;
+  margin: 0.9rem 0;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--redact-ink);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.82em;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .private {

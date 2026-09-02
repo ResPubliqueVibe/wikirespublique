@@ -74,8 +74,117 @@ const md = new MarkdownIt({ html: false, linkify: true, typographer: false, brea
 // Скобки выбраны не случайно: markdown-it обрывает текстовый разбор на «{»,
 // а на «(» — нет, поэтому со скобками-круглыми правило просто не срабатывало.
 // ---------------------------------------------------------------------------
-const REDACTED = '[ДАННЫЕ УДАЛЕНЫ]';
 const PRIVATE_RE = /\{\{([^{}]*?)\}\}/g;
+
+// ---------------------------------------------------------------------------
+// Как выглядит цензура: стилистика рассекреченного досье. Чёрные плашки ████
+// закрывают отдельные слова, [УДАЛЕНО] и родня — законченные куски текста,
+// целый абзац упирается в отказ в допуске.
+//
+// Вариант выбирается не случайным числом, а хешем самого скрытого текста:
+// один и тот же кусок всегда выглядит одинаково. Настоящий Math.random менял
+// бы вид при каждой перезагрузке и — хуже — расходился бы между статьёй,
+// заголовком вкладки, поиском и диффами, которые рендерятся отдельно.
+// ---------------------------------------------------------------------------
+const BLOCK = '█';
+const REDACTED = '[ДАННЫЕ УДАЛЕНЫ]';
+// Для одного слова плашка уместнее фразы, поэтому она в наборе дважды.
+const WORD_VARIANTS = [null, null, '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]'];
+const TEXT_VARIANTS = ['[ДАННЫЕ УДАЛЕНЫ]', '[УДАЛЕНО]', '[ЗАСЕКРЕЧЕНО]', '[ДАННЫЕ УДАЛЕНЫ]'];
+const NOTICE = '[ДОСТУП К ФРАГМЕНТУ ОГРАНИЧЕН — ТРЕБУЕТСЯ ДОПУСК УРОВНЯ 4]';
+const LONG_FRAGMENT = 120;
+const WORDCHAR_RE = /[\p{L}\p{N}]/u;
+// Чем склеивают номера и даты: Зона-19, 14.02.2003, 14/02. Считается только
+// между знаками — точка в конце предложения слово не продолжает.
+const GLUE_RE = /[-/.:№]/;
+const MEDIA_RE = /^!\[[^\]]*\]\(\s*([^)\s]+)/;
+
+/** FNV-1a: нужен стабильный выбор варианта, а не криптография. */
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Прилегает ли к скрытому куску то же слово.
+ * @param {string} near соседний символ
+ * @param {string} far  следующий за ним наружу
+ */
+function touchesWord(near, far) {
+  if (!near) return false;
+  if (WORDCHAR_RE.test(near)) return true;
+  return GLUE_RE.test(near) && WORDCHAR_RE.test(far || '');
+}
+
+/**
+ * Текст, который увидел бы участник: без вики-ссылок, картинок и звёздочек
+ * жирного. По нему считается длина плашки и решается, слово это или фраза, —
+ * иначе {{[[Даниил Холлац|Данко]]}} сошло бы за фразу из-за разметки.
+ */
+function visibleText(s) {
+  return s
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`]/g, '')
+    .trim();
+}
+
+/** Плашка примерно в размер скрытого — как в настоящих досье. */
+function blocks(len) {
+  return BLOCK.repeat(Math.min(Math.max(len, 2), 12));
+}
+
+/** Скрытая картинка/видео/аудио: про них честнее сказать, что именно изъяли. */
+function mediaPhrase(secret) {
+  const m = MEDIA_RE.exec(secret);
+  if (!m) return '';
+  const ext = (m[1].split('?')[0].match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase();
+  if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) return '[ВИДЕОЗАПИСЬ ИЗЪЯТА]';
+  if (['mp3', 'ogg', 'wav', 'm4a', 'opus'].includes(ext)) return '[АУДИОЗАПИСЬ ИЗЪЯТА]';
+  return '[ИЗОБРАЖЕНИЕ ИЗЪЯТО]';
+}
+
+/**
+ * Что видит посторонний вместо скрытого куска.
+ * @param {string} secret   скрытый текст
+ * @param {string} fallback явная замена от автора ({{секрет||замена}})
+ * @param {string} before   два символа перед {{ — по ним видно, закрыт ли кусок слова
+ * @param {string} after    два символа после }}
+ */
+export function redactionText(secret, fallback = '', before = '', after = '') {
+  // Звёздочки в авторских заменах (*****ко) — та же цензура, только старым
+  // шрифтом: приводим их к плашкам.
+  if (fallback) return fallback.replace(/\*+/g, (stars) => BLOCK.repeat(stars.length));
+
+  const s = String(secret).trim();
+  if (!s) return REDACTED;
+
+  const media = mediaPhrase(s);
+  if (media) return media;
+
+  const shown = visibleText(s);
+
+  // Слово закрыто не целиком («Ал{{ексей}}», «20{{02}}») — фраза здесь порвала
+  // бы слово пополам, поэтому только плашка.
+  const b = String(before);
+  const a = String(after);
+  if (touchesWord(b.slice(-1), b.slice(-2, -1)) || touchesWord(a[0] || '', a[1] || '')) {
+    return blocks(shown.length);
+  }
+
+  // Числа и совсем короткие куски: «[УДАЛЕНО]» вместо «19» читается нелепо.
+  if (shown.length <= 4 || !/\p{L}/u.test(shown)) return blocks(shown.length);
+
+  if (shown.length >= LONG_FRAGMENT || shown.includes('\n')) return NOTICE;
+
+  const variants = /\s/.test(shown) ? TEXT_VARIANTS : WORD_VARIANTS;
+  return variants[hash32(shown) % variants.length] || blocks(shown.length);
+}
 
 function splitPrivate(raw) {
   const i = String(raw).indexOf('||');
@@ -86,9 +195,11 @@ function splitPrivate(raw) {
 
 /** Убирает разметку из обычного текста: заголовок вкладки, сниппеты, диффы. */
 export function redactPlain(text, canSeePrivate = false) {
-  return String(text ?? '').replace(PRIVATE_RE, (_, raw) => {
+  const whole = String(text ?? '');
+  return whole.replace(PRIVATE_RE, (match, raw, offset) => {
     const { secret, fallback } = splitPrivate(raw);
-    return canSeePrivate ? secret : fallback || REDACTED;
+    if (canSeePrivate) return secret;
+    return redactionText(secret, fallback, whole.slice(Math.max(0, offset - 2), offset), whole.slice(offset + match.length, offset + match.length + 2));
   });
 }
 
@@ -99,20 +210,34 @@ md.inline.ruler.before('emphasis', 'private', (state, silent) => {
   if (end < 0) return false;
   if (!silent) {
     const token = state.push('private', '', 0);
-    token.meta = splitPrivate(src.slice(pos + 2, end));
+    token.meta = {
+      ...splitPrivate(src.slice(pos + 2, end)),
+      before: src.slice(Math.max(0, pos - 2), pos),
+      after: src.slice(end + 2, end + 4)
+    };
   }
   state.pos = end + 2;
   return true;
 });
 
 md.renderer.rules.private = (tokens, idx, _opts, env) => {
-  const { secret, fallback } = tokens[idx].meta;
+  const { secret, fallback, before, after } = tokens[idx].meta;
   if (env?.canSeePrivate) {
     // Внутри скрытого куска работает обычная разметка: ссылки, картинки, курсив.
     return `<span class="private" title="Видно только участникам">${md.renderInline(secret, env)}</span>`;
   }
-  return `<span class="redacted" title="Скрыто: войдите, чтобы увидеть">${esc(fallback || REDACTED)}</span>`;
+  const text = redactionText(secret, fallback, before, after);
+  return `<span class="${redactedClass(text)}" title="Скрыто: войдите, чтобы увидеть">${esc(text)}</span>`;
 };
+
+/**
+ * Плашка сама себе оформление, поэтому чёрный фон достаётся только фразам:
+ * иначе «█████ко» получило бы подложку и на открытых буквах.
+ */
+function redactedClass(text) {
+  if (text === NOTICE) return 'redacted redacted-notice';
+  return text.includes(BLOCK) ? 'redacted redacted-blocks' : 'redacted redacted-plate';
+}
 
 /** Inline rule for [[Target]] and [[Target|label]]. */
 function wikilinkPlugin(mdInst) {
@@ -297,7 +422,7 @@ export function renderInfobox(meta, title, env) {
     if (caption) html += `<div class="infobox-caption">${renderInline(caption, env)}</div>`;
   } else if (imagePrivate) {
     html += `<div class="infobox-image infobox-image-redacted" role="img" aria-label="Изображение скрыто">`;
-    html += `<span class="redacted">[ИЗОБРАЖЕНИЕ ИЗЪЯТО]</span></div>`;
+    html += `<span class="redacted redacted-plate">[ИЗОБРАЖЕНИЕ ИЗЪЯТО]</span></div>`;
   }
   if (rows.length) {
     html += '<table class="infobox-rows">';
