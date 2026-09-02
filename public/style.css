@@ -1350,8 +1350,13 @@ button.btn-danger {
 
 /* Картинки внутри текста статьи не должны разъезжаться за колонку */
 .article-body img {
+  display: block;
   max-width: 100%;
+  /* Фотографии в тексте не должны занимать весь экран целиком. */
+  max-height: 360px;
+  width: auto;
   height: auto;
+  margin: 1rem 0;
   border-radius: 6px;
 }
 
