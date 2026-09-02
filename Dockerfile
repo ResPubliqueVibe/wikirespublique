@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY server.js seed.js ./
+COPY server.js seed.js apply.js ./
 COPY src/ ./src/
 COPY public/ ./public/
 
