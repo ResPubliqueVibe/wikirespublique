@@ -467,7 +467,13 @@ export function renderInfobox(meta, title, env) {
       continue;
     }
     let text = stringifyValue(value);
-    if (PRIVATE_KEYS.includes(k) && text.trim() && !text.includes('{{')) text = `{{${text}}}`;
+    // Поля вроде телеграма движок прячет сам. Восклицательный знак в начале
+    // значения — явное «показывать всем»: он снимается и поле остаётся открытым.
+    if (PRIVATE_KEYS.includes(k) && text.trimStart().startsWith('!')) {
+      text = text.trimStart().slice(1).trim();
+    } else if (PRIVATE_KEYS.includes(k) && text.trim() && !text.includes('{{')) {
+      text = `{{${text}}}`;
+    }
     if (text.trim()) rows.push([String(key), text]);
   }
 
