@@ -12,6 +12,15 @@ mkdir -p "$ROOT/data"
 
 LOG=$ROOT/data/deploy.log
 
+# systemd-run --user ищет шину пользователя по двум переменным окружения. В том
+# окружении, из которого бот делает мерж, их нет, и systemd-run отказывался
+# («$DBUS_SESSION_BUS_ADDRESS and $XDG_RUNTIME_DIR not defined»). Деплой тогда
+# уходил в прямой запуск — а там сокета докера не видно вовсе, и вики молча
+# оставалась старой. Значения стандартные, выводятся из uid.
+[ -n "${XDG_RUNTIME_DIR:-}" ] || XDG_RUNTIME_DIR=/run/user/$(id -u)
+[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+
 # Хук выполняется внутри git merge, которого ждёт бот, а сборка образа занимает
 # под минуту, поэтому деплой в любом случае уходит в сторону.
 #
@@ -27,6 +36,6 @@ then
   exit 0
 fi
 
-echo "$(date '+%F %T') systemd-run недоступен, деплой запущен напрямую" >> "$LOG"
+echo "$(date '+%F %T') systemd-run не сработал, деплой запущен напрямую — докера из песочницы может быть не видно" >> "$LOG"
 setsid sh "$ROOT/deploy.sh" >> "$LOG" 2>&1 < /dev/null &
 exit 0

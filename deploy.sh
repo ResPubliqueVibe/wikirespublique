@@ -18,6 +18,30 @@ MEDIA=${WIKI_MEDIA:-$ROOT/media}
 
 say() { printf '%s %s\n' "$(date '+%F %T')" "$*"; }
 
+# Недоступность докера бывает двух разных сортов, и лечатся они по-разному.
+#
+# Первый: сокета нет вовсе. Значит скрипт запущен в песочнице сессии, куда его
+# не примонтировали, и никакая смена группы не поможет — надо выбраться в
+# хостовое пространство имён. Пользовательский systemd работает именно в нём.
+# Шину systemd-run ищет по XDG_RUNTIME_DIR и DBUS_SESSION_BUS_ADDRESS; в
+# окружении сессии их может не быть, значения выводятся из uid.
+# --pipe --wait, чтобы запустивший руками увидел вывод и код возврата.
+if [ ! -S /var/run/docker.sock ] && [ -z "${WIKI_UNIT:-}" ] && command -v systemd-run >/dev/null 2>&1; then
+  [ -n "${XDG_RUNTIME_DIR:-}" ] || XDG_RUNTIME_DIR=/run/user/$(id -u)
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+  export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+  say "сокета докера не видно, перезапускаю себя через systemd"
+  # Юнит окружения не наследует, поэтому настройки машины передаются поимённо.
+  set -- --user --pipe --wait --collect --quiet \
+    --unit="wiki-deploy-$$-$(date +%s)" --setenv=WIKI_UNIT=1
+  for v in WIKI_IMAGE WIKI_CONTAINER WIKI_PORT WIKI_DATA WIKI_MEDIA; do
+    eval "val=\${$v:-}"
+    if [ -n "$val" ]; then set -- "$@" "--setenv=$v=$val"; fi
+  done
+  exec systemd-run "$@" /bin/sh -c "sh '$ROOT/deploy.sh'"
+fi
+
+# Второй сорт: сокет на месте, но не открывается.
 # Группу docker пользователь получил после старта своего systemd, и юнит попросить
 # её для себя не может (то же самое обходит deploy/run-bot.sh у бота). sg выдаёт
 # группу без пароля: аккаунт уже перечислен в /etc/group.
