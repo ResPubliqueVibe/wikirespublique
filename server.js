@@ -32,6 +32,7 @@ import { profilePage } from './src/pages/profile.js';
 import { requestsPage, registrationSubmittedPage } from './src/pages/requests.js';
 import { changesPage } from './src/pages/changes.js';
 import { errorPage } from './src/pages/notfound.js';
+import { apiRouter } from './src/api.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +52,11 @@ app.set('etag', false);
 
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cookieParser());
+
+// API стоит до сессии, статики и проверки «вики закрыта»: боту нужен JSON и
+// токен в заголовке, а не редирект на /login и не куки.
+app.use('/api', apiRouter);
+
 app.use(sessionMiddleware);
 
 // Anonymous visitors still need a CSRF token (login / register forms):
