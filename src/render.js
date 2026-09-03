@@ -316,6 +316,22 @@ function wikilinkPlugin(mdInst) {
 }
 md.use(wikilinkPlugin);
 
+// Абзац, начинающийся с «!!! », — крупная жирная строка (лид). Она печатается
+// сразу под оглавлением: renderPage переносит её туда, если оглавление есть.
+const LEAD_MARK = '!!! ';
+md.core.ruler.push('lead_paragraph', (state) => {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !token.content.startsWith(LEAD_MARK)) continue;
+    const open = state.tokens[state.tokens.indexOf(token) - 1];
+    if (!open || open.type !== 'paragraph_open') continue;
+    open.attrJoin('class', 'lead');
+    token.content = token.content.slice(LEAD_MARK.length);
+    if (token.children?.length && token.children[0].type === 'text') {
+      token.children[0].content = token.children[0].content.replace(/^!!!\s*/, '');
+    }
+  }
+});
+
 // Видео вставляют тем же синтаксисом, что и картинку: ![подпись](/media/файл.mp4).
 const VIDEO_RE = /\.(mp4|webm|mov|m4v)$/i;
 const defaultImage = md.renderer.rules.image;
@@ -503,7 +519,16 @@ export function renderPage(raw, { title = '', pageExists = () => true, canSeePri
   if (toc.length >= 3) {
     const box = tocHtml(toc);
     const first = html.search(/<h[23][ >]/);
-    html = first >= 0 ? html.slice(0, first) + box + '\n' + html.slice(first) : html + box;
+    // Лид стоит в тексте до первого заголовка, а показывать его надо под
+    // оглавлением — поэтому вырезаем и вставляем вместе с ним.
+    const lead = /<p class="lead">[\s\S]*?<\/p>\n?/.exec(html);
+    let leadHtml = '';
+    if (lead && (first < 0 || lead.index < first)) {
+      leadHtml = lead[0].trim() + '\n';
+      html = html.slice(0, lead.index) + html.slice(lead.index + lead[0].length);
+    }
+    const at = html.search(/<h[23][ >]/);
+    html = at >= 0 ? html.slice(0, at) + box + '\n' + leadHtml + html.slice(at) : html + box + leadHtml;
   }
   const { html: infobox, displayTitle } = renderInfobox(meta, title, env);
 

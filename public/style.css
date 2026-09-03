@@ -1370,3 +1370,11 @@ button.btn-danger {
   border-radius: 6px;
   background: #000;
 }
+
+/* Крупная строка под оглавлением: абзац, начинающийся с «!!! » */
+.article-body p.lead {
+  font-size: 1.4rem;
+  line-height: 1.35;
+  font-weight: 700;
+  margin: 1.2rem 0;
+}
