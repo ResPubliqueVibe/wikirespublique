@@ -6,7 +6,8 @@
   "description": "Res Publique — свободная энциклопедия конфы",
   "scripts": {
     "start": "node server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "test": "node --test \"test/**/*.test.mjs\""
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
