@@ -933,7 +933,7 @@ export const PAGES = [
 дата рождения: 13 мая 2003
 знак зодиака: Телец
 место рождения: Омск
-телеграм: "!@GospodinGlavniyVeter"
+телеграм: "{{@GospodinGlavniyVeter||@GospodinGlavniyVeter}}"
 город: Вупперталь
 ---
 
