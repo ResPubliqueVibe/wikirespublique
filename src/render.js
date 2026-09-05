@@ -244,6 +244,53 @@ md.renderer.rules.private = (tokens, idx, _opts, env) => {
   return `<span class="${redactedClass(text)}" title="Скрыто: войдите, чтобы увидеть">${esc(text)}</span>`;
 };
 
+// ---------------------------------------------------------------------------
+// Посты из Instagram: абзац, в котором нет ничего, кроме ссылки на пост.
+//
+//   https://www.instagram.com/p/CODE/
+//   https://www.instagram.com/reel/CODE/ | Подпись под постом
+//
+// Сам пост в вики не копируется: карточка ведёт на официальный iframe
+// instagram.com/p/CODE/embed, и подгружается он только по клику читателя.
+// До клика ни одного запроса к Meta со страницы не уходит, а без JS карточка
+// остаётся обычной ссылкой на пост.
+// ---------------------------------------------------------------------------
+const INSTAGRAM_RE =
+  /^https?:\/\/(?:www\.)?(?:instagram\.com|instagr\.am)\/(?:[A-Za-z0-9_.]+\/)?(p|reel|reels|tv)\/([A-Za-z0-9_-]{5,32})\/?(?:\?[^\s|]*)?(?:\s*\|\s*(.+?))?\s*$/;
+
+md.block.ruler.before('paragraph', 'instagram', (state, startLine, endLine, silent) => {
+  const line = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine]);
+  const m = INSTAGRAM_RE.exec(line.trim());
+  if (!m) return false;
+  if (silent) return true;
+
+  const token = state.push('instagram', '', 0);
+  // «reels» в адресной строке приложения — тот же reel.
+  token.meta = { kind: m[1] === 'reels' ? 'reel' : m[1], code: m[2], caption: (m[3] || '').trim() };
+  token.map = [startLine, startLine + 1];
+  state.line = startLine + 1;
+  return true;
+});
+
+md.renderer.rules.instagram = (tokens, idx, _opts, env) => {
+  const { kind, code, caption } = tokens[idx].meta;
+  const url = `https://www.instagram.com/${kind}/${code}/`;
+  // captioned — вариант врезки с текстом поста под картинкой.
+  const embed = `${url}embed/captioned/`;
+  const label = kind === 'reel' ? 'Рилс из Instagram' : 'Пост из Instagram';
+  let html = `<figure class="ig-embed">`;
+  html += `<a class="ig-embed-card" href="${esc(url)}" data-embed-src="${esc(embed)}"`;
+  html += ` target="_blank" rel="noopener nofollow">`;
+  html += `<span class="ig-embed-mark" aria-hidden="true">Instagram</span>`;
+  html += `<span class="ig-embed-label">${esc(label)}</span>`;
+  html += `<span class="ig-embed-url">instagram.com/${esc(kind)}/${esc(code)}</span>`;
+  html += `<span class="ig-embed-hint">Нажмите, чтобы загрузить его с серверов Instagram</span>`;
+  html += `</a>`;
+  if (caption) html += `<figcaption class="ig-embed-caption">${md.renderInline(caption, env)}</figcaption>`;
+  html += `</figure>`;
+  return html;
+};
+
 // Блок разбирается до fence: иначе строка «{{{» уехала бы в обычный абзац.
 md.block.ruler.before('fence', 'private_block', (state, startLine, endLine, silent) => {
   const open = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine]);

@@ -2,16 +2,19 @@ import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Версия в адресе стилей: без неё браузер держит старый style.css до часа
+// Версия в адресе статики: без неё браузер держит старый style.css до часа
 // и правки вёрстки «не появляются», хотя на сервере они уже есть.
-const STYLE_VERSION = (() => {
+function assetVersion(name) {
   try {
-    const file = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'style.css');
+    const file = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', name);
     return String(Math.floor(statSync(file).mtimeMs));
   } catch {
     return '1';
   }
-})();
+}
+
+const STYLE_VERSION = assetVersion('style.css');
+const EMBED_VERSION = assetVersion('embed.js');
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -159,6 +162,7 @@ export function layout({
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="Res Publique — свободная энциклопедия конфы.">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VERSION}">
+<script src="/embed.js?v=${EMBED_VERSION}" defer></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26' font-family='Georgia,serif'%3ER%3C/text%3E%3C/svg%3E">
 </head>
 <body class="${esc(bodyClass)}">

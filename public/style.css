@@ -1378,3 +1378,73 @@ button.btn-danger {
   font-weight: 700;
   margin: 1.2rem 0;
 }
+
+/* Врезки постов из Instagram: до клика — своя карточка, после — их iframe.
+   Ширина как у самой врезки, чтобы страница не прыгала при подмене. */
+.ig-embed {
+  margin: 1.2rem 0;
+  max-width: 540px;
+}
+
+.ig-embed-card {
+  display: block;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.ig-embed-card:hover,
+.ig-embed-card:focus-visible {
+  background: var(--bg-hover);
+  text-decoration: none;
+}
+
+.ig-embed-mark {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(75deg, #f9ce34, #ee2a7b 55%, #6228d7);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ig-embed-label {
+  display: block;
+  font-weight: 700;
+}
+
+.ig-embed-url {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--link);
+  overflow-wrap: anywhere;
+}
+
+.ig-embed-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.ig-embed-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+}
+
+.ig-embed-caption {
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
