@@ -36,7 +36,7 @@ before(async () => {
 имя: Тестовый Участник
 город: Ереван
 телеграм: "{{@TestNick}}"
-телеграм_id: 123456789
+телеграм_id: "{{123456789}}"
 ---
 
 Первый абзац про участника, он же краткое описание.
@@ -167,6 +167,33 @@ test('поиск по телеграм_id', async () => {
   const body = await res.json();
   assert.equal(body.page.slug, 'тестовый_участник');
   assert.equal(body.telegram.id, '123456789');
+});
+
+test('поиск по айди даёт того же участника, что и поиск по нику', async () => {
+  const byId = await (await get('/api/v1/users/by-telegram-id/123456789', token)).json();
+  const byNick = await (await get('/api/v1/users/by-telegram/TestNick', token)).json();
+  assert.equal(byId.found, true);
+  assert.deepEqual(byId.page, byNick.page);
+  assert.deepEqual(byId.telegram, byNick.telegram);
+});
+
+// Айди в источнике обёрнут в {{…}} — и находиться он должен всё равно,
+// иначе разметка приватности ломала бы поиск бота.
+test('телеграм_id не печатается в карточке никому', async () => {
+  const { renderPage } = await import('../src/render.js');
+  const raw = `---
+имя: Тестовый Участник
+телеграм: "{{@TestNick}}"
+телеграм_id: "{{123}}"
+---
+
+Текст статьи.
+`;
+  for (const canSeePrivate of [true, false]) {
+    const { infobox } = renderPage(raw, { title: 'Тестовый Участник', canSeePrivate });
+    assert.doesNotMatch(infobox, /123/, `canSeePrivate: ${canSeePrivate}`);
+    assert.doesNotMatch(infobox, /телеграм_id/i, `canSeePrivate: ${canSeePrivate}`);
+  }
 });
 
 test('список участников', async () => {
