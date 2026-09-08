@@ -18,7 +18,14 @@ import {
   checkCsrf,
 } from './src/auth.js';
 import { layout, tabs, esc } from './src/layout.js';
-import { slugify, titleFromSlug, parseFrontmatter, extractCategories, redactPlain } from './src/render.js';
+import {
+  slugify,
+  titleFromSlug,
+  parseFrontmatter,
+  extractCategories,
+  redactPlain,
+  MAX_CONTENT,
+} from './src/render.js';
 
 import { articlePage, missingPage } from './src/pages/article.js';
 import { editPage } from './src/pages/edit.js';
@@ -41,7 +48,6 @@ const HOST = '0.0.0.0';
 const INVITE_CODE = process.env.INVITE_CODE || 'respublique';
 const MEDIA_DIR = process.env.MEDIA_DIR || join(__dirname, 'media');
 const HOME_SLUG = slugify('Заглавная_страница');
-const MAX_CONTENT = 200000;
 const CHANGES_LIMIT = 100;
 const ANON_CSRF_COOKIE = 'rp_csrf';
 

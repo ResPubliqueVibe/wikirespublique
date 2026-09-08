@@ -23,6 +23,7 @@ let server;
 let ApiTokens;
 let token;
 let revokedToken;
+let writeToken;
 
 before(async () => {
   ({ server } = await import('../server.js'));
@@ -99,6 +100,8 @@ before(async () => {
   });
 
   token = ApiTokens.issue('тест').token;
+  // Пишущий токен: правки от него идут от имени участника «Шериф».
+  writeToken = ApiTokens.issue('Шериф', { scope: 'write' }).token;
   const revoked = ApiTokens.issue('отозванный');
   ApiTokens.revoke(revoked.id);
   revokedToken = revoked.token;
@@ -114,6 +117,17 @@ after(() => {
 
 const get = (path, tok) =>
   fetch(BASE + path, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+
+/** Изменяющий запрос. body строкой уходит как есть — так проверяется битый JSON. */
+const send = (method, path, body, tok) =>
+  fetch(BASE + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+    },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
 
 test('без заголовка Authorization — 401', async () => {
   const res = await get('/api/v1/users/by-telegram/TestNick');
@@ -269,4 +283,241 @@ test('служебная страница с двоеточием в slug не �
   assert.equal(list.users.some((u) => u.page.slug.includes(':')), false);
   const res = await get('/api/v1/users/by-telegram/nickname', token);
   assert.equal(res.status, 404);
+});
+
+// ---------------------------------------------------------------------------
+// Запись
+// ---------------------------------------------------------------------------
+
+test('read-токен на запись — 403', async () => {
+  const cases = [
+    ['PUT', '/api/v1/pages/новая_от_чтения', { content: 'Текст' }],
+    ['PATCH', '/api/v1/pages/тестовый_участник', { append: 'Текст' }],
+    ['POST', '/api/v1/pages/тестовый_участник/revert', { revision_id: 1 }],
+  ];
+  for (const [method, path, body] of cases) {
+    const res = await send(method, path, body, token);
+    assert.equal(res.status, 403, `${method} ${path}`);
+    assert.equal((await res.json()).error, 'forbidden');
+  }
+});
+
+test('PUT создаёт страницу — 201, и она читается', async () => {
+  const res = await send('PUT', '/api/v1/pages/новая_статья', {
+    content: '# Новая статья\n\nПервый абзац.\n\n[[Категория:Тесты]]\n',
+    comment: 'создано агентом',
+  }, writeToken);
+  assert.equal(res.status, 201);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.created, true);
+  assert.equal(body.title, 'Новая статья');
+  assert.equal(body.previous_revision_id, null);
+  assert.equal(body.url, 'https://wiki.test/wiki/новая_статья');
+
+  const page = await (await get('/api/v1/pages/новая_статья', token)).json();
+  assert.equal(page.exists, true);
+  assert.equal(page.revision_id, body.revision_id);
+  assert.match(page.content, /Первый абзац/);
+  assert.deepEqual(page.categories, ['Тесты']);
+});
+
+test('PUT меняет страницу — 200 и previous_revision_id прежней ревизии', async () => {
+  const before = await (await get('/api/v1/pages/новая_статья', token)).json();
+  const res = await send('PUT', '/api/v1/pages/новая_статья', {
+    content: '# Новая статья\n\nПервый абзац стал длиннее, чем был раньше.\n',
+    expected_revision_id: before.revision_id,
+  }, writeToken);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.created, false);
+  assert.equal(body.previous_revision_id, before.revision_id);
+  assert.notEqual(body.revision_id, before.revision_id);
+});
+
+test('неверный expected_revision_id — 409 с текущей ревизией', async () => {
+  const page = await (await get('/api/v1/pages/новая_статья', token)).json();
+  const res = await send('PUT', '/api/v1/pages/новая_статья', {
+    content: 'Что-то совсем другое, но достаточно длинное для проверки.',
+    expected_revision_id: page.revision_id + 1000,
+  }, writeToken);
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.error, 'conflict');
+  assert.equal(body.current_revision_id, page.revision_id);
+});
+
+test('вынос текста — 409 too_much_removed, с force проходит', async () => {
+  const long = 'Длинный текст статьи. '.repeat(100); // ~2200 символов
+  assert.ok(long.length > 2000);
+  await send('PUT', '/api/v1/pages/длинная_статья', { content: long }, writeToken);
+
+  const short = 'Коротко.';
+  const res = await send('PUT', '/api/v1/pages/длинная_статья', { content: short }, writeToken);
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.error, 'too_much_removed');
+  assert.equal(body.new_length, short.length);
+  assert.ok(body.old_length > body.new_length);
+
+  const forced = await send('PUT', '/api/v1/pages/длинная_статья', { content: short, force: true }, writeToken);
+  assert.equal(forced.status, 200);
+  assert.equal((await forced.json()).ok, true);
+});
+
+test('пустой content — 400 даже с force', async () => {
+  for (const body of [{ content: '' }, { content: '   \n  ', force: true }]) {
+    const res = await send('PUT', '/api/v1/pages/новая_статья', body, writeToken);
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'empty_content');
+  }
+  const res = await send('PUT', '/api/v1/pages/новая_статья', { comment: 'без текста' }, writeToken);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, 'bad_request');
+});
+
+test('PATCH card добавляет и удаляет ключи, порядок — по FIELD_ORDER', async () => {
+  await send('PUT', '/api/v1/pages/карточная', {
+    content: '---\nгород: Ереван\nрост: 180\nпрозвище: Шляпа\n---\n\nТело статьи не трогаем.\n',
+  }, writeToken);
+
+  const res = await send('PATCH', '/api/v1/pages/карточная', {
+    card: { имя: 'Икс', город: 'Берлин', рост: null, 'любимый цвет': 'синий' },
+  }, writeToken);
+  assert.equal(res.status, 200);
+
+  const page = await (await get('/api/v1/pages/карточная', token)).json();
+  const { meta } = (await import('../src/render.js')).parseFrontmatter(page.content);
+  assert.deepEqual(Object.keys(meta), ['имя', 'город', 'прозвище', 'любимый цвет']);
+  assert.equal(meta['город'], 'Берлин');
+  assert.equal(meta['рост'], undefined);
+  assert.match(page.content, /Тело статьи не трогаем\./);
+});
+
+test('PATCH section дописывает в нужный раздел и заводит новый', async () => {
+  await send('PUT', '/api/v1/pages/разделы', {
+    content: '# Разделы\n\n## Работа\n\nРаботал тут.\n\n## Хобби\n\nСобирает марки.\n',
+  }, writeToken);
+
+  await send('PATCH', '/api/v1/pages/разделы', {
+    section: { heading: 'работа', content: 'А потом ушёл.', mode: 'append' },
+  }, writeToken);
+  let page = await (await get('/api/v1/pages/разделы', token)).json();
+  assert.match(page.content, /Работал тут\.\n\nА потом ушёл\./);
+  assert.match(page.content, /## Хобби\n\nСобирает марки\./);
+
+  const res = await send('PATCH', '/api/v1/pages/разделы', {
+    section: { heading: 'Слухи', content: 'Говорят разное.' },
+  }, writeToken);
+  assert.equal(res.status, 200);
+  page = await (await get('/api/v1/pages/разделы', token)).json();
+  assert.match(page.content, /## Слухи\n\nГоворят разное\./);
+  assert.ok(page.content.indexOf('## Слухи') > page.content.indexOf('## Хобби'));
+});
+
+test('PATCH append дописывает в конец', async () => {
+  const res = await send('PATCH', '/api/v1/pages/разделы', { append: 'Совсем в конец.' }, writeToken);
+  assert.equal(res.status, 200);
+  const page = await (await get('/api/v1/pages/разделы', token)).json();
+  assert.match(page.content, /Совсем в конец\.\n$/);
+});
+
+test('PATCH несуществующей страницы — 404, страница не заводится', async () => {
+  const res = await send('PATCH', '/api/v1/pages/такой_нет', { append: 'Текст' }, writeToken);
+  assert.equal(res.status, 404);
+  const body = await res.json();
+  assert.equal(body.exists, false);
+  assert.equal(body.title, 'Такой нет');
+  assert.equal((await get('/api/v1/pages/такой_нет', token)).status, 404);
+});
+
+test('revert возвращает прежний текст новой ревизией', async () => {
+  await send('PUT', '/api/v1/pages/откатная', { content: 'Первая версия текста.\n' }, writeToken);
+  const first = await (await get('/api/v1/pages/откатная', token)).json();
+  await send('PUT', '/api/v1/pages/откатная', { content: 'Вторая версия текста.\n' }, writeToken);
+
+  const res = await send('POST', '/api/v1/pages/откатная/revert', { revision_id: first.revision_id }, writeToken);
+  assert.equal(res.status, 200);
+  const page = await (await get('/api/v1/pages/откатная', token)).json();
+  assert.equal(page.content, 'Первая версия текста.\n');
+
+  const history = await (await get('/api/v1/pages/откатная/history', token)).json();
+  assert.equal(history.revisions.length, 3);
+  assert.equal(history.revisions[0].id, page.revision_id);
+
+  const alien = await send('POST', '/api/v1/pages/откатная/revert', {
+    revision_id: (await (await get('/api/v1/pages/разделы', token)).json()).revision_id,
+  }, writeToken);
+  assert.equal(alien.status, 400);
+  assert.equal((await alien.json()).error, 'bad_revision');
+});
+
+test('автор правки — участник токена, правка видна в /v1/changes', async () => {
+  const history = await (await get('/api/v1/pages/откатная/history', token)).json();
+  assert.equal(history.revisions[0].author, 'Шериф');
+
+  const changes = await (await get('/api/v1/changes?limit=20', token)).json();
+  const mine = changes.changes.find((c) => c.slug === 'откатная');
+  assert.ok(mine);
+  assert.equal(mine.author, 'Шериф');
+  assert.equal(mine.url, 'https://wiki.test/wiki/откатная');
+  assert.ok(mine.revision_id > 0);
+});
+
+test('списки, история, ревизия и поиск отдают ожидаемое', async () => {
+  const list = await (await get('/api/v1/pages?limit=500', token)).json();
+  assert.ok(list.count >= list.pages.length);
+  const one = list.pages.find((p) => p.slug === 'новая_статья');
+  assert.ok(one);
+  assert.equal(one.url, 'https://wiki.test/wiki/новая_статья');
+  assert.ok(one.size > 0);
+  assert.ok(one.revision_id > 0);
+  // Служебные страницы из списка не выкидываются — агенту нужен и шаблон.
+  assert.ok(list.pages.some((p) => p.slug.includes(':')));
+
+  const paged = await (await get('/api/v1/pages?limit=1&offset=1', token)).json();
+  assert.equal(paged.pages.length, 1);
+  assert.equal(paged.count, list.count);
+  assert.notEqual(paged.pages[0].slug, list.pages[0].slug);
+
+  const hist = await (await get('/api/v1/pages/новая_статья/history', token)).json();
+  assert.equal(hist.slug, 'новая_статья');
+  assert.ok(hist.revisions.length >= 2);
+  assert.ok(hist.revisions[0].id > hist.revisions[1].id);
+
+  const rev = await (await get(`/api/v1/revisions/${hist.revisions.at(-1).id}`, token)).json();
+  assert.equal(rev.slug, 'новая_статья');
+  assert.equal(rev.comment, 'создано агентом');
+  assert.match(rev.content, /Первый абзац/);
+
+  const found = await (await get('/api/v1/search?q=Собирает', token)).json();
+  assert.equal(found.query, 'Собирает');
+  assert.equal(found.count, found.results.length);
+  const hit = found.results.find((r) => r.slug === 'разделы');
+  assert.ok(hit);
+  assert.match(hit.snippet, /Собирает марки/);
+});
+
+test('приватная разметка в content не раскрыта, а в text — раскрыта', async () => {
+  const page = await (await get('/api/v1/pages/тестовый_участник', token)).json();
+  assert.match(page.content, /\{\{секрет\}\}/);
+  assert.match(page.content, /телеграм: "\{\{@TestNick\}\}"/);
+  assert.match(page.text, /спрятан секрет от посторонних/);
+  assert.doesNotMatch(page.text, /\{\{/);
+  assert.equal(page.card['телеграм'], '@TestNick');
+});
+
+test('битый JSON — 400 bad_json, а не 500', async () => {
+  const res = await send('PUT', '/api/v1/pages/новая_статья', '{ "content": ', writeToken);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, 'bad_json');
+});
+
+test('несуществующая страница — 404 с угаданным заголовком', async () => {
+  const res = await get('/api/v1/pages/нет_такой_страницы', token);
+  assert.equal(res.status, 404);
+  const body = await res.json();
+  assert.equal(body.exists, false);
+  assert.equal(body.error, 'not_found');
+  assert.equal(body.title, 'Нет такой страницы');
 });
