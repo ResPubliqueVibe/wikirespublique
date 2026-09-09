@@ -115,9 +115,48 @@ function fieldOrderProblem(content) {
   return problems.length ? problems.join('; ') : null;
 }
 
+/**
+ * Фамилии в вики не показывают посторонним: страницу участника называют одним
+ * именем («Денис», при тёзках — «Денис 1»), а фамилию в полях карточки пишут
+ * под цензурой — «Денис {{Дьячков}}». Правило легко забыть, заводя страницу
+ * руками, поэтому оно проверяется на каждом прогоне. Признак фамилии —
+ * характерное окончание: имён с такими окончаниями почти не бывает.
+ */
+const SURNAME_TAIL = /(ов|ова|ев|ева|ёв|ёва|ин|ина|ын|ына|ко|ич|ук|юк|ский|ская|цкий|цкая|швили|дзе|ян|ants)$/i;
+const NAME_KEYS = ['заголовок', 'имя', 'подпись'];
+
+function openSurnameProblem(spec) {
+  const { meta } = parseFrontmatter(spec.content);
+  if (!meta || String(meta['тип'] ?? '').trim() !== 'участник') return null;
+  const problems = [];
+
+  // В названии страницы после имени допустим только номер тёзки.
+  const titleTail = String(spec.title).trim().split(/\s+/).slice(1);
+  if (titleTail.some((w) => !/^\d+$/.test(w))) {
+    problems.push(`название «${spec.title}» — не одно имя; страницу зовут «Имя» или «Имя 2»`);
+  }
+
+  for (const key of NAME_KEYS) {
+    const value = String(meta[key] ?? '').trim();
+    if (!value) continue;
+    // Слова внутри {{…}} уже закрыты цензурой, их и проверять нечего.
+    const open = value.replace(/\{\{[^{}]*\}\}/g, ' ');
+    // Первое слово — имя, его окончание ничего не значит: «Кристина», «Константин».
+    const surname = open
+      .split(/[^\p{L}ёЁ-]+/u)
+      .filter(Boolean)
+      .slice(1)
+      .find((w) => w.length > 2 && SURNAME_TAIL.test(w));
+    if (surname) problems.push(`в поле «${key}» открытая фамилия «${surname}» — закройте её как {{${surname}}}`);
+  }
+  return problems.length ? problems.join('; ') : null;
+}
+
 for (const spec of PAGES) {
   const problem = fieldOrderProblem(spec.content);
   if (problem) console.warn(`  ? ${spec.title} — ${problem}`);
+  const surname = openSurnameProblem(spec);
+  if (surname) console.warn(`  ? ${spec.title} — ${surname}`);
 }
 
 const bot = Users.byUsername(BOT_USERNAME);
