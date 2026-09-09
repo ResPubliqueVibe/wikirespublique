@@ -264,10 +264,10 @@ https://www.instagram.com/reel/CODE/ | Подпись под постом
 
 ```json
 "photo": {
-  "url": "https://wiki.respubli.cc/api/v1/media/aleksey-pushkaryov.jpg",
-  "site_url": "https://wiki.respubli.cc/media/aleksey-pushkaryov.jpg",
-  "private": false,
-  "caption": "Алексей Пушкарёв"
+  "url": "https://wiki.respubli.cc/api/v1/media/private/aleksey.jpg",
+  "site_url": "https://wiki.respubli.cc/media/private/aleksey.jpg",
+  "private": true,
+  "caption": "Алексей {{Пушкарёв}}"
 }
 ```
 
@@ -285,7 +285,7 @@ curl -H "Authorization: Bearer rpw_…" https://wiki.respubli.cc/api/v1/users/by
 
 ```
 curl -H "Authorization: Bearer rpw_…" \
-  https://wiki.respubli.cc/api/v1/media/aleksey-pushkaryov.jpg -o photo.jpg
+  https://wiki.respubli.cc/api/v1/media/private/aleksey.jpg -o photo.jpg
 ```
 
 Токены выдаются из командной строки, прямо в примонтированной базе — пересобирать
