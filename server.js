@@ -108,6 +108,15 @@ app.use((req, res, next) => {
   return res.redirect(`/login?next=${back}`);
 });
 
+// История правок — не для посторонних: гостю видно текущую статью, а кто и когда
+// её менял — дело участников. Одно место вместо проверки в каждом маршруте.
+const HISTORY_PATH = /^\/changes$|^\/wiki\/[^/]+\/(history|diff|rev)(\/|$)/;
+
+app.use((req, res, next) => {
+  if (req.user || !HISTORY_PATH.test(req.path)) return next();
+  return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+});
+
 // Приватные фотографии лежат в media/private/ и посторонним не отдаются.
 app.use('/media/private', (req, res, next) => {
   if (req.user) return next();
@@ -210,7 +219,7 @@ function renderArticle(req, res, slug, { revision = null, flash = null } = {}) {
       status: 404,
       title,
       body: missingPage({ slug, title, user: req.user }),
-      tabsHtml: tabs({ slug, active: 'read', exists: false }),
+      tabsHtml: tabs({ slug, active: 'read', exists: false, user: req.user }),
       bodyClass: 'page-missing',
     });
   }
@@ -234,7 +243,7 @@ function renderArticle(req, res, slug, { revision = null, flash = null } = {}) {
       revision: revision || null,
       flash,
     }),
-    tabsHtml: tabs({ slug, active: 'read', exists: true }),
+    tabsHtml: tabs({ slug, active: 'read', exists: true, user: req.user }),
     bodyClass: 'page-article',
   });
 }
@@ -310,7 +319,7 @@ app.get('/wiki/:slug', (req, res, next) => {
         isNew: !page,
         csrfToken: req.csrfToken,
       }),
-      tabsHtml: tabs({ slug, active: 'edit', exists: !!page }),
+      tabsHtml: tabs({ slug, active: 'edit', exists: !!page, user: req.user }),
       bodyClass: 'page-edit',
     });
   }
@@ -334,7 +343,7 @@ app.post('/wiki/:slug', requireLogin, checkCsrf, (req, res, next) => {
       status: 400,
       title: `Правка: ${title}`,
       body: editPage({ slug, title, content, isNew: !existing, csrfToken: req.csrfToken, error: message }),
-      tabsHtml: tabs({ slug, active: 'edit', exists: !!existing }),
+      tabsHtml: tabs({ slug, active: 'edit', exists: !!existing, user: req.user }),
       bodyClass: 'page-edit',
     });
 
@@ -360,7 +369,7 @@ app.get('/wiki/:slug/history', (req, res, next) => {
   send(req, res, {
     title: `История: ${page.title}`,
     body: historyPage({ page, revisions: Revisions.history(page.id) }),
-    tabsHtml: tabs({ slug, active: 'history', exists: true }),
+    tabsHtml: tabs({ slug, active: 'history', exists: true, user: req.user }),
     bodyClass: 'page-history',
   });
 });
@@ -407,7 +416,7 @@ app.get('/wiki/:slug/diff', (req, res, next) => {
       user: req.user,
       csrfToken: req.csrfToken,
     }),
-    tabsHtml: tabs({ slug, active: 'history', exists: true }),
+    tabsHtml: tabs({ slug, active: 'history', exists: true, user: req.user }),
     bodyClass: 'page-diff',
   });
 });
@@ -585,7 +594,7 @@ app.use((req, res) => {
   send(req, res, {
     status: 404,
     title: 'Страница не найдена',
-    body: errorPage({ status: 404 }),
+    body: errorPage({ status: 404, user: req.user }),
     bodyClass: 'page-error',
   });
 });
@@ -598,7 +607,7 @@ app.use((err, req, res, next) => {
   send(req, res, {
     status,
     title: status === 404 ? 'Страница не найдена' : 'Ошибка',
-    body: errorPage({ status, message: status >= 500 ? '' : err?.message || '' }),
+    body: errorPage({ status, message: status >= 500 ? '' : err?.message || '', user: req.user }),
     bodyClass: 'page-error',
   });
 });
