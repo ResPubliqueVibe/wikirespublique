@@ -1448,3 +1448,13 @@ button.btn-danger {
   color: var(--text-muted);
   font-size: 0.9em;
 }
+
+/* Замок для посторонних: вместо статьи — приглашение войти. Кнопки в строку,
+   с воздухом сверху, чтобы страница не выглядела отпиской. */
+.gateview .gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 1.5rem 0 1rem;
+}

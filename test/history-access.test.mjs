@@ -4,8 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Вики с открытым чтением (PUBLIC_WIKI=1): статьи видны всем, а история правок —
-// только участникам. Проверяем и маршруты, и то, что ссылок на них гостю не видно.
+// Вики с открытым чтением (PUBLIC_WIKI=1): постороннему видна одна заглавная
+// страница, всё остальное — приглашение войти. История правок закрыта тем же
+// замком; проверяем и маршруты, и то, что ссылок на них гостю не видно.
 const dir = mkdtempSync(join(tmpdir(), 'rpwiki-hist-'));
 process.env.DB_FILE = join(dir, 't.sqlite');
 process.env.PORT = '20035';
@@ -30,18 +31,18 @@ after(() => {
 const get = (path) => fetch(`${BASE}${path}`, { redirect: 'manual' });
 const wiki = `/wiki/${encodeURIComponent(SLUG)}`;
 
-test('гостю статья открыта, а история правок — нет', async () => {
-  assert.equal((await get(wiki)).status, 200);
+test('гостю закрыты и статья, и история правок', async () => {
+  const article = await get(wiki);
+  assert.equal(article.status, 401);
+  assert.ok(!(await article.text()).includes('Текст статьи.'));
 
   for (const path of ['/changes', `${wiki}/history`, `${wiki}/diff`, `${wiki}/rev/1`]) {
-    const res = await get(path);
-    assert.equal(res.status, 302, path);
-    assert.match(res.headers.get('location') || '', /^\/login\?next=/, path);
+    assert.equal((await get(path)).status, 401, path);
   }
 });
 
 test('гостю не показываем ссылок на историю', async () => {
-  const html = await (await get(wiki)).text();
+  const html = await (await get('/')).text();
   assert.ok(!html.includes('Свежие правки'), 'в навигации не должно быть свежих правок');
   assert.ok(!html.includes('/history'), 'вкладки «История» быть не должно');
 });

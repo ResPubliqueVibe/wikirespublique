@@ -37,6 +37,7 @@ import { loginPage } from './src/pages/login.js';
 import { registerPage } from './src/pages/register.js';
 import { profilePage } from './src/pages/profile.js';
 import { requestsPage, registrationSubmittedPage } from './src/pages/requests.js';
+import { gatePage } from './src/pages/gate.js';
 import { changesPage } from './src/pages/changes.js';
 import { errorPage } from './src/pages/notfound.js';
 import { apiRouter } from './src/api.js';
@@ -110,6 +111,26 @@ app.use((req, res, next) => {
   }
   const back = encodeURIComponent(req.originalUrl);
   return res.redirect(`/login?next=${back}`);
+});
+
+// Даже когда чтение открыто (PUBLIC_WIKI=1), постороннему видна одна заглавная
+// страница. Всё остальное — списки участников, категории, поиск, сами статьи —
+// это про живых людей, поэтому вместо содержимого аноним получает приглашение
+// зарегистрироваться. Стоит после статики: стили и скрипты нужны и на нём.
+const ANON_PATHS = new Set(['/', '/login', '/register', '/logout']);
+const HOME_PATHS = new Set([`/wiki/${HOME_SLUG}`, `/wiki/${encodeURIComponent(HOME_SLUG)}`]);
+
+app.use((req, res, next) => {
+  if (req.user || ANON_PATHS.has(req.path) || HOME_PATHS.has(req.path)) return next();
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next(httpError(403, 'Это могут делать только участники вики.'));
+  }
+  return send(req, res, {
+    status: 401,
+    title: 'Только для участников',
+    body: gatePage({ next: req.originalUrl }),
+    bodyClass: 'page-gate',
+  });
 });
 
 // История правок — не для посторонних: гостю видно текущую статью, а кто и когда
