@@ -40,6 +40,7 @@ import { requestsPage, registrationSubmittedPage } from './src/pages/requests.js
 import { changesPage } from './src/pages/changes.js';
 import { errorPage } from './src/pages/notfound.js';
 import { apiRouter } from './src/api.js';
+import { crawlerMiddleware } from './src/crawlers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +56,9 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.set('etag', false);
+
+// Раньше всего остального: robots.txt, 403 ботам и noindex на каждый ответ.
+app.use(crawlerMiddleware);
 
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cookieParser());

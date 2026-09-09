@@ -162,6 +162,7 @@ export function layout({
 <title>${esc(fullTitle)}</title>
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="Res Publique — свободная энциклопедия конфы.">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <link rel="stylesheet" href="/style.css?v=${STYLE_VERSION}">
 <script src="/embed.js?v=${EMBED_VERSION}" defer></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26' font-family='Georgia,serif'%3ER%3C/text%3E%3C/svg%3E">
