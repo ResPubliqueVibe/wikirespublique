@@ -8,6 +8,10 @@ RUN npm ci --omit=dev
 
 COPY server.js seed.js apply.js ./
 COPY src/ ./src/
+# Разовые миграции базы лежат в scripts/: rename-pages.js сеялка импортирует и
+# зовёт сама при старте, остальные запускаются через docker exec, — так или
+# иначе каталог обязан быть в образе.
+COPY scripts/ ./scripts/
 COPY public/ ./public/
 
 # Ни база, ни картинки статей не лежат в образе: оба каталога монтируются

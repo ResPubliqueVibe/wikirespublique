@@ -4,6 +4,7 @@ import { db, Users, Pages, reindex } from './src/db.js';
 import { hashPassword } from './src/auth.js';
 import { slugify, parseFrontmatter, extractCategories } from './src/render.js';
 import { PAGES } from './src/content.js';
+import { renamePages } from './scripts/rename-pages.js';
 
 const BOT_USERNAME = 'Бот';
 
@@ -23,6 +24,12 @@ function categoriesFor(content) {
 }
 
 function seed() {
+  // Строго до создания недостающих страниц: сеялка ищет страницу по новому
+  // слагу из src/content.js и, не найдя, заводит пустую. Запустись она первой —
+  // полсотни «Валерий» уже занимали бы новые слаги, миграция уткнулась бы в
+  // конфликт на каждой паре, а старые «Валерии Поповы» остались бы в вики.
+  renamePages();
+
   const bot = ensureBot();
   let created = 0;
   let skipped = 0;
