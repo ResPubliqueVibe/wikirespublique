@@ -38,6 +38,13 @@ test('заглавная открыта посторонним', async () => {
   assert.match(await res.text(), /Привет/);
 });
 
+test('заглавная открыта и под своим адресом, в любом написании', async () => {
+  for (const slug of ['заглавная_страница', 'Заглавная_страница', 'ЗАГЛАВНАЯ_СТРАНИЦА']) {
+    const res = await fetch(`${BASE}/wiki/${encodeURIComponent(slug)}`);
+    assert.equal(res.status, 200, slug);
+  }
+});
+
 test('статья постороннему не отдаётся — вместо неё приглашение', async () => {
   const res = await fetch(`${BASE}/wiki/${encodeURIComponent('денис_1')}`);
   assert.equal(res.status, 401);
