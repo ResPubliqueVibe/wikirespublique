@@ -117,11 +117,23 @@ app.use((req, res, next) => {
 // страница. Всё остальное — списки участников, категории, поиск, сами статьи —
 // это про живых людей, поэтому вместо содержимого аноним получает приглашение
 // зарегистрироваться. Стоит после статики: стили и скрипты нужны и на нём.
+// Белый список: перечислено ровно то, что открыто, всё остальное закрыто по
+// умолчанию — новый маршрут не окажется доступен посторонним по недосмотру.
 const ANON_PATHS = new Set(['/', '/login', '/register', '/logout']);
-const HOME_PATHS = new Set([`/wiki/${HOME_SLUG}`, `/wiki/${encodeURIComponent(HOME_SLUG)}`]);
+
+/** Заглавная под своим адресом: «/wiki/Заглавная_страница» в любом написании. */
+function isHomeArticle(path) {
+  const m = /^\/wiki\/([^/]+)$/.exec(path);
+  if (!m) return false;
+  try {
+    return slugify(decodeURIComponent(m[1])) === HOME_SLUG;
+  } catch {
+    return false; // битый percent-encoding — точно не заглавная
+  }
+}
 
 app.use((req, res, next) => {
-  if (req.user || ANON_PATHS.has(req.path) || HOME_PATHS.has(req.path)) return next();
+  if (req.user || ANON_PATHS.has(req.path) || isHomeArticle(req.path)) return next();
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next(httpError(403, 'Это могут делать только участники вики.'));
   }
