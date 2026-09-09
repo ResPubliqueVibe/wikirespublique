@@ -152,11 +152,54 @@ function openSurnameProblem(spec) {
   return problems.length ? problems.join('; ') : null;
 }
 
+/**
+ * По умолчанию страница участника закрыта целиком: посторонний видит имя,
+ * строку о том, что человек в конфе, служебный хвост и одну плашку вместо
+ * всего остального. Поэтому у карточки открытыми остаются только имя, подпись
+ * и путь к фотографии, а текст статьи лежит внутри блока {{{ … }}}.
+ */
+const OPEN_KEYS = ['тип', 'заголовок', 'имя', 'подпись', 'фото'];
+
+function openContentProblem(spec) {
+  const { meta, body } = parseFrontmatter(spec.content);
+  if (!meta || String(meta['тип'] ?? '').trim() !== 'участник') return null;
+  // Шаблон и прочие служебные страницы — образец разметки, а не человек.
+  if (spec.title.includes(':')) return null;
+  const problems = [];
+
+  const open = Object.entries(meta)
+    .filter(([k, v]) => !OPEN_KEYS.includes(k) && String(v ?? '').trim())
+    .filter(([, v]) => !/^\{\{[\s\S]*\}\}$/.test(String(v).trim()))
+    .map(([k]) => k);
+  if (open.length) problems.push(`поля карточки открыты посторонним: ${open.join(', ')}`);
+
+  // Абзацы вне блока: вводная строка, пометка цитатой, служебный хвост про
+  // незаполненные поля и категории — всё остальное должно быть закрыто.
+  const outside = String(body)
+    .replace(/^[ \t]*\{\{\{[ \t]*\r?\n[\s\S]*?\r?\n[ \t]*\}\}\}[ \t]*$/gm, '')
+    .split(/\n{2,}/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const extra = outside.filter(
+    (para, i) =>
+      !(i === 0 && para.startsWith('**')) &&
+      !para.startsWith('>') &&
+      !/^(Страница|Статья)[ -]/.test(para) &&
+      !para.startsWith('[[Категория:')
+  );
+  if (extra.length) {
+    problems.push(`текст открыт посторонним (${extra.length} абз.) — закройте блоком {{{ … }}}`);
+  }
+  return problems.length ? problems.join('; ') : null;
+}
+
 for (const spec of PAGES) {
   const problem = fieldOrderProblem(spec.content);
   if (problem) console.warn(`  ? ${spec.title} — ${problem}`);
   const surname = openSurnameProblem(spec);
   if (surname) console.warn(`  ? ${spec.title} — ${surname}`);
+  const open = openContentProblem(spec);
+  if (open) console.warn(`  ? ${spec.title} — ${open}`);
 }
 
 const bot = Users.byUsername(BOT_USERNAME);
