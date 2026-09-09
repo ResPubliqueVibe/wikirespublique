@@ -1,7 +1,7 @@
 import { esc } from '../layout.js';
 
 /** Generic error view (404, 403, 500 …) rendered inside the site layout. */
-export function errorPage({ status = 500, message = '', detail = '' } = {}) {
+export function errorPage({ status = 500, message = '', detail = '', user = null } = {}) {
   const titles = {
     400: 'Некорректный запрос',
     403: 'Доступ запрещён',
@@ -17,7 +17,7 @@ export function errorPage({ status = 500, message = '', detail = '' } = {}) {
   <p class="error-message">${esc(message || defaultMessage(status))}</p>
   ${detail ? `<pre class="error-detail">${esc(detail)}</pre>` : ''}
   <p class="muted">
-    <a href="/">На заглавную</a> · <a href="/pages">Все страницы</a> · <a href="/changes">Свежие правки</a>
+    <a href="/">На заглавную</a> · <a href="/pages">Все страницы</a>${user ? ' · <a href="/changes">Свежие правки</a>' : ''}
   </p>
 </div>`;
 }

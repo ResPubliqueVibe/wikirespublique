@@ -69,16 +69,17 @@ export function notice(kind, text) {
   return `<div class="notice notice-${esc(kind)}" role="${kind === 'error' ? 'alert' : 'status'}">${esc(text)}</div>`;
 }
 
+// membersOnly — ссылки, которые гостю не показываем: история правок закрыта.
 const NAV = [
   { href: '/', label: 'Заглавная страница' },
-  { href: '/changes', label: 'Свежие правки' },
+  { href: '/changes', label: 'Свежие правки', membersOnly: true },
   { href: '/pages', label: 'Все страницы' },
   { href: '/random', label: 'Случайная страница' },
   { href: '/category/%D0%A3%D1%87%D0%B0%D1%81%D1%82%D0%BD%D0%B8%D0%BA%D0%B8', label: 'Участники' },
 ];
 
-function sidebar(current, query) {
-  const links = NAV.map(
+function sidebar(current, query, user = null) {
+  const links = NAV.filter((n) => user || !n.membersOnly).map(
     (n) =>
       `<li><a href="${esc(n.href)}"${n.href === current ? ' aria-current="page" class="active"' : ''}>${esc(n.label)}</a></li>`
   ).join('');
@@ -121,7 +122,7 @@ function userBlock(user, csrfToken, pendingCount = 0) {
  * Article tabs: Статья | Править | История
  * @param {{slug:string, active:string, exists:boolean}} opts
  */
-export function tabs({ slug, active = 'read', exists = true } = {}) {
+export function tabs({ slug, active = 'read', exists = true, user = null } = {}) {
   if (!slug) return '';
   const url = wikiUrl(slug);
   const item = (key, label, href) =>
@@ -129,7 +130,7 @@ export function tabs({ slug, active = 'read', exists = true } = {}) {
   return `<ul class="tabs" role="navigation" aria-label="Действия со статьёй">
     ${item('read', 'Статья', url)}
     ${item('edit', exists ? 'Править' : 'Создать', `${url}?action=edit`)}
-    ${item('history', 'История', `${url}/history`)}
+    ${user ? item('history', 'История', `${url}/history`) : ''}
   </ul>`;
 }
 
@@ -168,7 +169,7 @@ export function layout({
 <body class="${esc(bodyClass)}">
 <a class="skip-link" href="#content">Перейти к содержанию</a>
 <div class="app">
-  <header class="sidebar">${sidebar(currentNav, query)}</header>
+  <header class="sidebar">${sidebar(currentNav, query, user)}</header>
   <div class="main">
     <div class="topbar">
       ${tabsHtml || '<span class="tabs-spacer"></span>'}
@@ -179,7 +180,7 @@ ${body}
     </main>
     <footer class="site-footer">
       <p>Res Publique — частная вики конфы. Текст доступен участникам; правьте ответственно.</p>
-      <p class="footer-links"><a href="/pages">Все страницы</a> · <a href="/changes">Свежие правки</a> · <a href="/random">Случайная страница</a></p>
+      <p class="footer-links"><a href="/pages">Все страницы</a>${user ? ' · <a href="/changes">Свежие правки</a>' : ''} · <a href="/random">Случайная страница</a></p>
     </footer>
   </div>
 </div>
